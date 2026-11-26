@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
-  <title>群雄行伍錄 · v10.5.0 Beta候選版</title>
+  <title>群雄行伍錄 · v10.6.0-dev18 輿圖與主命深化版</title>
   <style id="offline-utilities">/*! tailwindcss v4.1.10 | MIT License | https://tailwindcss.com */
 @layer properties;
 :root, :host {
@@ -1493,7 +1493,7 @@ button:focus-visible,summary:focus-visible{outline:3px solid #a16207;outline-off
 @media(max-width:640px){#mobile-nav{padding-bottom:env(safe-area-inset-bottom)}#mobile-nav button,#btn-info-close,#btn-result-ok,#btn-result-x,#btn-end-turn{min-height:44px}#info-modal-body{font-size:14px;overflow-wrap:anywhere}#choice-desc{font-size:14px}#hero-card .portrait img{max-height:280px!important}#info-modal-body table{display:block;max-width:100%;overflow-x:auto}#hud-hero-name{overflow-wrap:anywhere}}
 @media(prefers-reduced-motion:reduce){.modal-pop{animation:none!important;transition:none!important}}
 </style>
-</head>
+<style>#info-modal.world-map-full{padding:0}#info-modal.world-map-full>div{width:100%;max-width:none;height:100%;max-height:none;border-radius:0}</style><style>@media(max-width:639px){#footer-controls{position:sticky;bottom:58px;z-index:20;padding:6px}#footer-geo-summary{display:none}#btn-end-turn{width:100%}#game-screen header{padding:8px}#mini-status-bar{gap:4px}#info-modal>div{max-height:86dvh}#compact-panel-links button{min-height:38px}}</style></head>
 <body class="scroll-backdrop min-h-screen w-full flex flex-col">
 
   <!-- ===================================================================== -->
@@ -2267,7 +2267,7 @@ return {create,STATES:[...STATES]};
       function canonicalHero(h) { if(!h||h._isCustom)return null; return heroIdentity.get(h.heroId)||heroIdentity.get(h.id)||(!h._isCustom&&heroIdentity.get(h.name))||null; }
       function heroKey(h) { return h._isCustom ? h.id : (canonicalHero(h)?.heroId || h.heroId || h.id || h.name); }
       function availableHero(h,year) { return (!Number.isInteger(h.activeYear)||h.activeYear<=year)&&(!Number.isInteger(h.deathYear)||h.deathYear>=year); }
-      function migrateHero(h) { const source=h._isCustom?null:canonicalHero(h); if(source&&!h._isCustom){h.heroId=source.heroId;h.id=source.id;} if(h.ambition===undefined) h.ambition=source?.ambition??50; return h; }
+      function migrateHero(h) { const source=h._isCustom?null:canonicalHero(h); if(source&&!h._isCustom){h.heroId=source.heroId;h.id=source.id;} if(h.ambition===undefined) h.ambition=source?.ambition??50; if(!h._isCustom&&!h.courtesy)h.courtesy=source?.courtesy||'待考'; return h; }
 
       const HIST_ALIAS_MAP = Object.create(null);
       HISTORICAL_DB.forEach(function (h) {
@@ -2291,6 +2291,40 @@ return {create,STATES:[...STATES]};
         { id: 'tr_yuxi', name: '傳國玉璽', slot: '信物', bonusText: '魅力 +5 · 聲望 +40', statBonus: { cha: 5 } }
       ];
 
+      const ORDINARY_TREASURES = [
+        {name:'桃木劍',slot:'神兵',bonusText:'武力 +1',statBonus:{war:1}},
+        {name:'舊鐵刀',slot:'神兵',bonusText:'武力 +2',statBonus:{war:2}},
+        {name:'獵弓',slot:'神兵',bonusText:'武力 +1',statBonus:{war:1}},
+        {name:'殘卷',slot:'兵書',bonusText:'智力 +1',statBonus:{int:1}},
+        {name:'精製長劍',slot:'神兵',bonusText:'武力 +3',statBonus:{war:3}},
+        {name:'良駒',slot:'坐騎',bonusText:'武力 +2',statBonus:{war:2}}
+      ];
+      function equippedBonus(g,k){return Object.entries(g.equippedTreasures||{}).reduce((sum,[slot,name])=>{const t=[...TREASURE_DB,...ORDINARY_TREASURES].find(x=>x.name===name&&x.slot===slot);return sum+(t&&g.treasures.includes(name)?Number(t.statBonus?.[k]||0):0);},0);}
+      function effectiveHeroStat(g,k){return Math.min(100,Math.max(1,Number(g.hero[k]||0)+equippedBonus(g,k)));}
+      function setTreasureEquipment(g,name){const t=[...TREASURE_DB,...ORDINARY_TREASURES].find(x=>x.name===name);if(!t||!g.treasures.includes(name))return false;g.equippedTreasures=g.equippedTreasures||{};if(g.equippedTreasures[t.slot]===name)delete g.equippedTreasures[t.slot];else g.equippedTreasures[t.slot]=name;return true;}
+      function openEquipment(){openInfo('寶物裝備',body=>{const note=document.createElement('p');note.textContent='每類限裝一件；裝卸不消耗AP，基礎屬性不變。';body.append(note);for(const name of new Set(game.treasures)){const t=[...TREASURE_DB,...ORDINARY_TREASURES].find(x=>x.name===name);if(!t)continue;const b=document.createElement('button');b.className='btn-secondary-ink p-2 block w-full my-1';b.textContent=t.name+'｜'+t.bonusText+'｜'+(game.equippedTreasures?.[t.slot]===name?'卸下':'裝備');b.disabled=!!independentBattle(game);b.onclick=()=>{if(independentBattle(game))return;if(setTreasureEquipment(game,name)){renderGame();openEquipment();}};body.append(b);}const b=document.createElement('button');b.textContent='閱覽珍寶圖鑑';b.className='btn-secondary-ink p-2';b.onclick=()=>openCollection('treasures');body.append(b);});}
+      function syncDiscovery(g){
+        g.discoveredTreasures=[...new Set([...(g.discoveredTreasures||[]),...g.treasures])];
+        g.discoveredHeroes=[...new Set([...(g.discoveredHeroes||[]),...([g.hero,...g.roster,...(g.companions||[])].map(heroKey).filter(Boolean))])];
+      }
+      function exploreTreasure(g,roll=Math.random()*100){
+        syncDiscovery(g);
+        if(roll<35)return {title:'訪古尋幽',desc:'沿途閱覽山川，未有所得。',chips:[]};
+        if(roll<65){const events=[['捕獲竊賊','協助鄉民追回失物，獲得賞金。',20],['商旅解圍','協助商旅修整貨車，獲贈謝禮。',30],['鄉野見聞','聽聞地方逸事，增廣見識。',0]];const e=events[Math.floor(Math.random()*events.length)];g.gold+=e[2];return {title:e[0],desc:e[1],chips:e[2]?['銀錢 +'+e[2]]:[]};}
+        if(roll>=98)return {title:'古物傳聞',desc:'聽聞珍寶下落，尚須專屬事件查證，未取得寶物。',chips:[]};
+        const pool=ORDINARY_TREASURES.slice(roll<90?0:4,roll<90?4:6).filter(t=>!g.discoveredTreasures.includes(t.name));
+        if(!pool.length)return {title:'遊歷見聞',desc:'未發現新的物品。',chips:[]};
+        const t=pool[Math.floor(Math.random()*pool.length)];g.treasures.push(t.name);syncDiscovery(g);
+        return {title:'探索所得 · '+t.name,desc:t.name==='桃木劍'?'荒郊破廟中發現一柄桃木劍。':'旅途中取得'+t.name+'。',chips:[t.bonusText+'（裝備後生效）']};
+      }
+      function openCollection(tab='heroes'){
+        syncDiscovery(game);openInfo('天下圖鑑',body=>{
+          for(const [key,label] of [['heroes','武將'],['treasures','珍寶']]){const b=document.createElement('button');b.className='btn-secondary-ink p-2 mr-2';b.textContent=label;b.disabled=key===tab;b.onclick=()=>openCollection(key);body.append(b);}
+          const entries=tab==='heroes'?HISTORICAL_DB.map(h=>({known:game.discoveredHeroes.includes(heroKey(h)),name:h.name,detail:h.courtesy||'史無記載'})):[...TREASURE_DB,...ORDINARY_TREASURES].map(t=>({known:game.discoveredTreasures.includes(t.name),name:t.name,detail:t.bonusText}));
+          const summary=document.createElement('p');summary.textContent='已解鎖 '+entries.filter(e=>e.known).length+'／'+entries.length;body.append(summary);
+          for(const e of entries){const row=document.createElement('p');row.className='border-b p-2';row.textContent=e.known?e.name+'｜'+e.detail:'？？？';body.append(row);}
+        });
+      }
       const DESTINY_POOL = [
         '天命所歸 · 逢凶化吉',
         '亂世龍吟 · 群英來投',
@@ -2587,23 +2621,53 @@ const BattleCore=(()=>{
 
 let game = null;
 
+// Scenario opening snapshots: provisional regional abstraction, never applied to loaded saves.
+const OPENING_REGIONS={
+182:{},184:{ye:'黃巾勢力',runan:'黃巾勢力'},188:{chengdu:'劉焉勢力',wuwei:'西涼勢力',tianshui:'西涼勢力'},189:{luoyang:'董卓勢力',chengdu:'劉焉勢力',wuwei:'西涼勢力',tianshui:'西涼勢力'},
+194:{luoyang:'漢室',changan:'李傕勢力',chenliu:'曹氏勢力',puyang:'呂布勢力',ye:'袁氏勢力',beiping:'公孫氏',beihai:'孔融勢力',xiapi:'劉備勢力',shouchun:'袁術勢力',lujiang:'袁術勢力',xiangyang:'荊州牧府',jiangling:'荊州牧府',jiangxia:'荊州牧府',chengdu:'劉璋勢力',hanzhong:'張魯勢力',wuwei:'馬騰勢力',tianshui:'馬騰勢力'},
+200:{luoyang:'曹氏勢力',xuchang:'曹氏勢力',chenliu:'曹氏勢力',puyang:'曹氏勢力',xiapi:'曹氏勢力',runan:'曹氏勢力',wancheng:'曹氏勢力',ye:'袁氏勢力',beiping:'袁氏勢力',beihai:'袁氏勢力',shouchun:'曹氏勢力',lujiang:'江東孫氏',jianye:'江東孫氏',kuaiji:'江東孫氏',xiangyang:'荊州牧府',jiangling:'荊州牧府',jiangxia:'荊州牧府',chengdu:'劉璋勢力',hanzhong:'張魯勢力',wuwei:'馬騰勢力',tianshui:'馬騰勢力'},
+208:{luoyang:'曹氏勢力',changan:'曹氏勢力',xuchang:'曹氏勢力',chenliu:'曹氏勢力',puyang:'曹氏勢力',ye:'曹氏勢力',beiping:'曹氏勢力',beihai:'曹氏勢力',xiapi:'曹氏勢力',runan:'曹氏勢力',wancheng:'曹氏勢力',shouchun:'曹氏勢力',jinyang:'曹氏勢力',shangdang:'曹氏勢力',daixian:'曹氏勢力',lujiang:'江東孫氏',jianye:'江東孫氏',kuaiji:'江東孫氏',xiangyang:'荊州牧府',jiangling:'荊州牧府',jiangxia:'荊州牧府',chengdu:'劉璋勢力',hanzhong:'張魯勢力',wuwei:'馬騰勢力',tianshui:'馬騰勢力'},
+214:{luoyang:'曹氏勢力',changan:'曹氏勢力',xuchang:'曹氏勢力',chenliu:'曹氏勢力',puyang:'曹氏勢力',ye:'曹氏勢力',beiping:'曹氏勢力',beihai:'曹氏勢力',xiapi:'曹氏勢力',runan:'曹氏勢力',wancheng:'曹氏勢力',shouchun:'曹氏勢力',jinyang:'曹氏勢力',shangdang:'曹氏勢力',daixian:'曹氏勢力',xiangyang:'曹氏勢力',tianshui:'曹氏勢力',wuwei:'曹氏勢力',lujiang:'江東孫氏',jianye:'江東孫氏',kuaiji:'江東孫氏',jiangxia:'江東孫氏',jiangling:'劉備勢力',changsha:'劉備勢力',wuling:'劉備勢力',guiyang:'劉備勢力',chengdu:'劉備勢力',hanzhong:'張魯勢力'}};
+const OPENING_RULERS={'曹操':'曹氏勢力','劉備':'劉備勢力','孫權':'江東孫氏','孫策':'江東孫氏','袁紹':'袁氏勢力','袁術':'袁術勢力','董卓':'董卓勢力','公孫瓚':'公孫氏','張魯':'張魯勢力','馬騰':'馬騰勢力','呂布':'呂布勢力','張角':'黃巾勢力','劉焉':'劉焉勢力','劉璋':'劉璋勢力','劉表':'荊州牧府','孔融':'孔融勢力','李傕':'李傕勢力'};
+const OPENING_MONTH={182:1,184:2,188:1,189:9,194:12,200:8,208:11,214:7};
+function scenarioCities(year){const used=new Set();return TKGeoEngine.getAllCities().map(c=>{const owner=OPENING_REGIONS[year]?.[c.id]||'漢室';const h=HISTORICAL_DB.find(h=>h.name===c.defender&&availableHero(h,year));const service=h&&OPENING_SERVICE.find(x=>x[0]===h.name&&year>=x[1]&&year<=(x[3]??9999));const eligible=h&&!used.has(h.name)&&(service?.[2]===owner||OPENING_RULERS[h.name]===owner);if(eligible)used.add(h.name);return {...c,owner,defender:eligible?h.name:'',garrison:Math.round(c.garrison*(year<=188?.65:year<=194?.8:1))};});}
+
+function openingRulerFaction(h,year){const f=OPENING_RULERS[h.name];if(!f||h.name==='孫權'&&year<200||h.name==='孫策'&&(year<195||year>=200))return null;return scenarioCities(year).some(c=>c.owner===f)?f:null;}
+
+const OPENING_SERVICE=[
+ ['曹仁',190,'曹氏勢力'],['曹洪',190,'曹氏勢力'],['夏侯惇',190,'曹氏勢力'],['夏侯淵',190,'曹氏勢力'],['荀彧',192,'曹氏勢力'],['程昱',192,'曹氏勢力'],['郭嘉',196,'曹氏勢力'],['許褚',197,'曹氏勢力'],['張遼',199,'曹氏勢力'],['徐晃',196,'曹氏勢力'],['于禁',193,'曹氏勢力'],['樂進',190,'曹氏勢力'],['張郃',201,'曹氏勢力'],['荀攸',196,'曹氏勢力'],['周瑜',195,'江東孫氏'],['張昭',195,'江東孫氏'],['程普',195,'江東孫氏'],['黃蓋',195,'江東孫氏'],['韓當',195,'江東孫氏'],['太史慈',196,'江東孫氏'],['魯肅',200,'江東孫氏'],['呂蒙',200,'江東孫氏'],['甘寧',208,'江東孫氏'],['陸遜',203,'江東孫氏'],['田豐',194,'袁氏勢力',200],['沮授',194,'袁氏勢力',200],['顏良',194,'袁氏勢力',200],['文醜',194,'袁氏勢力',200],['審配',194,'袁氏勢力',204],['張郃',194,'袁氏勢力',200],['關羽',194,'劉備勢力'],['張飛',194,'劉備勢力'],['簡雍',194,'劉備勢力'],['趙雲',200,'劉備勢力'],['諸葛亮',208,'劉備勢力'],['法正',214,'劉備勢力'],['李儒',189,'董卓勢力',192],['呂布',189,'董卓勢力',191],['高順',194,'呂布勢力',198],['成廉',194,'呂布勢力',198],['紀靈',194,'袁術勢力',199],['張勳',194,'袁術勢力',199]];
+function openingService(h,year,cities){const r=OPENING_SERVICE.find(x=>x[0]===h.name&&year>=x[1]&&year<=(x[3]??9999));return r?Object.values(cities).find(c=>c.owner===r[2]):null;}
+function seedOpeningService(g){const people=personGeoView(g).engine.snapshot();for(const h of HISTORICAL_DB){const id=heroKey(h),x=people[id],f=openingRulerFaction(h,g.scenarioYear),c=(f&&Object.values(g.cities).find(c=>c.owner===f))||openingService(h,g.scenarioYear,g.cities);if(x&&c&&availableHero(h,g.year)&&x.status!=='captive'&&id!==heroKey(g.hero)&&!g.roster.some(y=>heroKey(y)===id)){x.status='serving';x.faction=c.owner;x.city=c.id;}}g.personGeo={last:governanceTurn(g),people};}
+
 function personGeoView(g){
  const people={},unknown=[],owned=new Set([g.hero,...g.roster].map(heroKey)),companions=new Set((g.companions||[]).map(heroKey));
- for(const h of HISTORICAL_DB){const id=heroKey(h);if(campaignOfficerUnavailable(g,id)&&!(g.captives||[]).some(c=>c.id===id))continue;const cap=(g.captives||[]).find(x=>x.id===id),def=Object.values(g.cities).find(c=>heroIdentity.get(c.defender)?.heroId===id);let city=null,status='free',faction=null;
+ for(const h of HISTORICAL_DB){const id=heroKey(h);if((!availableHero(h,g.year)||campaignOfficerUnavailable(g,id))&&!(g.captives||[]).some(c=>c.id===id))continue;const cap=(g.captives||[]).find(x=>x.id===id),def=Object.values(g.cities).find(c=>heroIdentity.get(c.defender)?.heroId===id);let city=null,status='free',faction=null;
  if(owned.has(id)){city=g.currentCityId;status='serving';faction='PLAYER';}
  else if(companions.has(id)){city=g.currentCityId;status='free';}
  else if(cap){city=cap.city;status='captive';}
  else if(def&&availableHero(h,g.year)&&def.owner!=='PLAYER'){city=def.id;status='serving';faction=def.owner;}
  else if(h.cityMapping==='region_match'||h.cityMapping==='legacy'){city=h.city;}
+ if(!g.personGeo&&!owned.has(id)&&!companions.has(id)&&!cap){const f=openingRulerFaction(h,g.scenarioYear);const c=(f&&Object.values(g.cities).find(c=>c.owner===f))||openingService(h,g.scenarioYear,g.cities);if(c&&c.owner!=='無主'&&c.owner!=='PLAYER'){city=c.id;status='serving';faction=c.owner;}}
  if(!Object.hasOwn(g.cities,city)){unknown.push(id);continue;}
  people[id]={id,name:h.name,city,status,faction,availableFrom:h.activeYear};
  }
- for(const [id,x] of Object.entries(people)){const old=g.personGeo?.people?.[id];if(old&&x.status==='free'&&!companions.has(id)){if(Object.hasOwn(g.cities,old.city))x.city=old.city;if(typeof old.formerFaction==='string')x.formerFaction=old.formerFaction;if(old.status==='serving'&&old.faction!=='PLAYER'&&!Object.values(g.cities).some(c=>c.owner===old.faction))x.formerFaction=old.faction;if(old.status==='serving'&&old.faction!=='PLAYER'&&Object.values(g.cities).some(c=>c.owner===old.faction)){x.status='serving';x.faction=old.faction;}}}
+ for(const [id,x] of Object.entries(people)){const old=g.personGeo?.people?.[id];if(old&&['free','serving'].includes(x.status)&&!owned.has(id)&&!companions.has(id)){if(Object.hasOwn(g.cities,old.city))x.city=old.city;if(typeof old.formerFaction==='string')x.formerFaction=old.formerFaction;if(old.status==='serving'&&old.faction!=='PLAYER'&&!Object.values(g.cities).some(c=>c.owner===old.faction))x.formerFaction=old.faction;if(old.status==='serving'&&old.faction!=='PLAYER'&&Object.values(g.cities).some(c=>c.owner===old.faction)){x.status='serving';x.faction=old.faction;}}}
  const engine=globalThis.TKPersonGeoEngine.create({cities:g.cities,people});return {engine,unknown};
 }
 function validPersonGeo(g){const v=g.personGeo;if(v===undefined)return true;if(!v||!Number.isSafeInteger(v.last)||v.last<0||v.last>governanceTurn(g)||!v.people||typeof v.people!=='object'||Array.isArray(v.people))return false;return Object.entries(v.people).every(([id,x])=>heroIdentity.has(id)&&x&&x.id===id&&Object.hasOwn(g.cities,x.city)&&['free','serving','captive'].includes(x.status)&&(x.status!=='serving'||typeof x.faction==='string'&&x.faction.length>0));}
+function settleOfficerContinuity(g){
+ const {engine}=personGeoView(g),people=engine.snapshot(),used=new Set();
+ const busy=new Set((g.campaigns?.active||[]).flatMap(x=>Object.values(x.officers||{})));
+ const eligible=(id,c)=>{const h=heroIdentity.get(id);return !!h&&availableHero(h,g.year)&&!campaignOfficerUnavailable(g,id)&&!(g.captives||[]).some(x=>x.id===id)&&!busy.has(id)&&!used.has(id)&&people[id]?.status==='serving'&&people[id]?.faction===c.owner;};
+ for(const c of Object.values(g.cities)){if(c.owner==='PLAYER')continue;const id=heroIdentity.get(c.defender)?.heroId;if(id&&eligible(id,c)){used.add(id);continue;}c.defender='';}
+ for(const c of Object.values(g.cities)){if(c.defender||c.owner==='PLAYER'||c.owner==='無主')continue;const candidates=Object.values(people).filter(x=>x.city===c.id&&eligible(x.id,c)).sort((a,b)=>(heroIdentity.get(b.id).cmd||0)-(heroIdentity.get(a.id).cmd||0));if(candidates.length){c.defender=candidates[0].id;used.add(c.defender);g.logs.unshift('【守將交接】'+c.name+'：'+candidates[0].name);}}
+ g.logs=g.logs.slice(0,500);
+}
 function settlePersonGeo(g){const t=governanceTurn(g);if(g.personGeo?.last===t)return;const {engine}=personGeoView(g),people=engine.snapshot();for(const x of Object.values(people)){const h=heroIdentity.get(x.id);if(x.status!=='free'||(g.companions||[]).some(y=>heroKey(y)===x.id)||!h||!availableHero(h,g.year))continue;const n=g.cities[x.city].neighbors.filter(id=>roadOpen(g,x.city,id));if(n.length&&Math.random()<0.03){engine.travel(x.id,n[Math.floor(Math.random()*n.length)]);}}engine.tick();const recruited=new Set();for(const x of Object.values(engine.snapshot())){const h=heroIdentity.get(x.id),f=g.cities[x.city].owner;if(x.status==='free'&&!(g.companions||[]).some(y=>heroKey(y)===x.id)&&h&&availableHero(h,g.year)&&f&&f!=='PLAYER'&&f!=='無主'&&!recruited.has(f)&&Math.random()<0.01){if(engine.recruit(x.id,f,x.city,{year:g.year}).ok)recruited.add(f);}}g.personGeo={last:t,people:engine.snapshot()};}
-function localHeroPool(g){const {engine}=personGeoView(g);const ids=new Set(engine.candidates(g.currentCityId,{year:g.year}));return HISTORICAL_DB.filter(h=>ids.has(heroKey(h))&&!(g.companions||[]).some(y=>heroKey(y)===heroKey(h))&&availableHero(h,g.year));}
+function pendingTalentList(g){const people=personGeoView(g).engine.snapshot();const owned=new Set([g.hero,...g.roster,...(g.companions||[])].map(heroKey));return (g.pendingTalents||[]).filter(x=>{const h=heroIdentity.get(x.id),p=people[x.id];return x.expires>governanceTurn(g)&&h&&availableHero(h,g.year)&&!owned.has(x.id)&&p&&['free','hidden','travelling','fleeing'].includes(p.status);});}
+function rememberTalent(g,h){const id=heroKey(h);g.pendingTalents=pendingTalentList(g);if(!g.pendingTalents.some(x=>x.id===id))g.pendingTalents.push({id,expires:governanceTurn(g)+5,bond:Number(h.bond??50)});}
+function openPendingTalents(){if(!game||pendingRecruit||storyBusy()||independentBattle(game))return;openInfo('待登庸名冊',body=>{const entries=pendingTalentList(game);if(!entries.length){body.textContent='目前沒有待登庸人才。';return;}for(const x of entries){const h=heroIdentity.get(x.id);const local=localHeroPool(game).some(y=>heroKey(y)===x.id);const row=document.createElement('div');row.className='border rounded p-2 my-2';const label=document.createElement('p');label.textContent=`${h.name}｜好感 ${x.bond}｜剩餘 ${x.expires-governanceTurn(game)} 旬｜登庸 ${recruitFactors(game,{...h,bond:x.bond}).chance}%`;row.append(label);for(const [name,cost,gain] of [['拜訪',0,8],['贈禮',100,15],['宴飲',180,20],['再次登庸',0,0]]){const b=document.createElement('button');b.className='btn-primary-ink m-1 p-2';b.textContent=name+'（1 AP'+(cost?'／'+cost+'銀錢':'')+'）';b.disabled=!local||game.ap<1||game.gold<cost;if(!local)b.title='人才目前不在可接觸範圍';b.onclick=()=>{if(!localHeroPool(game).some(y=>heroKey(y)===x.id)||game.ap<1||game.gold<cost||!pendingTalentList(game).includes(x)||independentBattle(game))return;game.ap--;game.gold-=cost;if(gain){x.bond=Math.min(100,x.bond+gain);renderGame();openPendingTalents();}else openRecruitDecision({...h,bond:x.bond},true);};row.append(b);}body.append(row);}});}
+function localHeroPool(g){const {engine}=personGeoView(g);const ids=new Set(engine.candidates(g.currentCityId,{year:g.year}));const owners=new Set(Object.values(g.cities).map(c=>String(c.owner||'')));return HISTORICAL_DB.filter(h=>ids.has(heroKey(h))&&talentRoleEligible(g,h)&&!owners.has(h.name)&&heroKey(h)!==heroKey(g.hero)&&!g.roster.some(y=>heroKey(y)===heroKey(h))&&!(g.companions||[]).some(y=>heroKey(y)===heroKey(h))&&availableHero(h,g.year));}
 function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{const {engine,unknown}=personGeoView(game),all=engine.snapshot(),labels={free:'暫定在野',serving:'仕官／麾下',captive:'被俘'};const note=document.createElement('p');note.textContent='已定位 '+Object.keys(all).length+' 人；待核對 '+unknown.length+' 人。初始位置依既有映射；在野人物逐旬移動，地方尋訪與NPC招攬共用名冊。';body.append(note);const input=document.createElement('input');input.placeholder='搜尋姓名或城池';body.append(input);const list=document.createElement('div');body.append(list);function draw(){list.replaceChildren();for(const h of HISTORICAL_DB){const x=all[heroKey(h)],city=x?game.cities[x.city].name:'待核對';if(!(h.name+' '+city).includes(input.value.trim()))continue;const row=document.createElement('p');row.textContent=h.name+' · '+city+' · '+(x?labels[x.status]+(x.faction?' · '+x.faction:''):'未配置');list.append(row);}}input.oninput=draw;draw();});}
 
       let activeCmdCategory = 'all';
@@ -2638,12 +2702,12 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
 
       function findMatchingHeroes(query) {
         const q = normalizeStr(query);
-        if (!q) return HISTORICAL_DB.slice(0, 18);
+        if (!q) return HISTORICAL_DB.filter(h=>availableHero(h,setupCfg.year)).slice(0, 18);
         if (HIST_ALIAS_MAP[query.trim()]) {
           const hit = HISTORICAL_DB.find(function (h) { return h.id === HIST_ALIAS_MAP[query.trim()]; });
-          if (hit) {
+          if (hit&&availableHero(hit,setupCfg.year)) {
             const others = HISTORICAL_DB.filter(function (h) {
-              if (h.id === hit.id) return false;
+              if (h.id === hit.id||!availableHero(h,setupCfg.year)) return false;
               const hay = normalizeStr([h.name, h.courtesy, h.origin].concat(h.aliases || []).join(' '));
               return hay.indexOf(q) !== -1;
             });
@@ -2652,7 +2716,7 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
         }
         return HISTORICAL_DB.filter(function (h) {
           const hay = normalizeStr([h.name, h.courtesy, h.origin, h.bio].concat(h.aliases || []).join(' '));
-          return hay.indexOf(q) !== -1;
+          return availableHero(h,setupCfg.year)&&hay.indexOf(q) !== -1;
         }).slice(0, 18);
       }
 
@@ -2681,9 +2745,10 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
             _bg: bg
           };
         }
-        return HISTORICAL_DB.find(function (h) { return h.id === setupCfg.selectedHeroId; }) || HISTORICAL_DB[0];
+        const h=HISTORICAL_DB.find(function (h) { return h.id === setupCfg.selectedHeroId; }) || HISTORICAL_DB[0]; return {...h,role:historicalOpeningRole(h,setupCfg.year)};
       }
 
+      function historicalOpeningRole(h,year){if(openingRulerFaction(h,year))return 'A';if(openingService(h,year,Object.fromEntries(scenarioCities(year).map(c=>[c.id,c]))))return 'B';if(h.name==='曹操'||h.name==='劉備'&&year>=184||h.name==='孫策'&&year>=190)return 'B';return h.role==='A'||h.role==='B'?'C':h.role||'C';}
       function getCurrentRoleObj() {
         return ROUTES_A_TO_E.find(function (r) { return r.id === setupCfg.roleId; }) || ROUTES_A_TO_E[0];
       }
@@ -2695,7 +2760,7 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
         const script = SCENARIO_SCRIPTS[setupCfg.year] || SCENARIO_SCRIPTS[184];
         const hero = getCurrentSetupHero();
 
-        if (!setupCfg.roleManual) {
+        if (!setupCfg.roleManual || setupCfg.charMode==='historical') {
           setupCfg.roleId = hero.role || 'A';
         }
         const roleObj = getCurrentRoleObj();
@@ -2829,7 +2894,7 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
       }
 
       function randomHistHero() {
-        const picked = HISTORICAL_DB[Math.floor(Math.random() * HISTORICAL_DB.length)];
+        const pool=HISTORICAL_DB.filter(h=>availableHero(h,setupCfg.year));if(!pool.length)return;const picked=pool[Math.floor(Math.random()*pool.length)];
         setupCfg.charMode = 'historical';
         setupCfg.selectedHeroId = picked.id;
         setupCfg.histQuery = picked.name;
@@ -2851,7 +2916,7 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
         {id:'cmd_merchant_guard',name:'招募鏢師',category:'social',ap:1,desc:'銀錢100，招募最多10名鏢師；上限100。',exec(g){const n=Math.min(10,100-(g.tradeGuards||0));g.gold-=100;g.tradeGuards=(g.tradeGuards||0)+n;return {title:'招募鏢師',desc:'商隊護衛增加。',chips:['鏢師 +'+n,'銀錢 -100']};}},
         {id:'cmd_merchant_broker',name:'居間撮合',category:'social',ap:1,desc:'在有市場資料且治安至少60的城池撮合交易，試行報酬銀錢50。',exec(g){g.gold+=50;return {title:'居間撮合',desc:'協助地方商戶撮合交易。',chips:['銀錢 +50']};}},
         {id:'cmd_free_gather',name:'招募私曲',category:'military',ap:1,goldCost:80,foodCost:40,desc:'招募最多50名私人隨從，上限500。',exec(g){const n=Math.min(50,500-g.troops);g.troops+=n;return {title:'招募私曲',desc:'新增'+n+'名私曲。',chips:['兵力 +'+n]};}},
-        {id:'cmd_free_patrol',name:'地方討匪',category:'military',ap:1,desc:'低治安地區每旬一次，率私曲討伐地方匪眾。',exec(g){const c=g.cities[g.currentCityId],n=Math.min(g.troops,500),food=Math.ceil(n/10)*2;const r=BattleCore.resolve({troops:n,command:g.hero.cmd,martial:g.hero.war,morale:g.morale??100,type:'infantry',food},{troops:80,command:45,martial:45,morale:70,type:'infantry',food:16},'plain',[1,2].map(()=>1+Math.floor(Math.random()*100)));g.troops-=n-r.attacker.troops;g.food-=food-r.attacker.food;g.morale=r.attacker.morale;g.freePatrolLast=governanceTurn(g);const win=r.outcome==='attacker'&&r.attacker.troops>0;if(win){g.gold+=60;g.repute+=8;c.security=Math.min(100,c.security+2);}return {title:'地方討匪',desc:win?'討匪成功。':'討匪未勝。',chips:['傷亡 '+(n-r.attacker.troops),'軍糧 -'+(food-r.attacker.food),'聲望 +'+(win?8:0)]};}},
+        {id:'cmd_free_patrol',name:'地方討匪',category:'military',ap:1,desc:'低治安地區每旬一次，率私曲討伐地方匪眾。',exec(g){const c=g.cities[g.currentCityId],n=Math.min(g.troops,500),food=Math.ceil(n/10)*2;const r=BattleCore.resolve({troops:n,command:effectiveHeroStat(g,'cmd'),martial:effectiveHeroStat(g,'war'),morale:g.morale??100,type:'infantry',food},{troops:80,command:45,martial:45,morale:70,type:'infantry',food:16},'plain',[1,2].map(()=>1+Math.floor(Math.random()*100)));g.troops-=n-r.attacker.troops;g.food-=food-r.attacker.food;g.morale=r.attacker.morale;g.freePatrolLast=governanceTurn(g);const win=r.outcome==='attacker'&&r.attacker.troops>0;if(win){g.gold+=60;g.repute+=8;c.security=Math.min(100,c.security+2);}return {title:'地方討匪',desc:win?'討匪成功。':'討匪未勝。',chips:['傷亡 '+(n-r.attacker.troops),'軍糧 -'+(food-r.attacker.food),'聲望 +'+(win?8:0)]};}},
         {id:'cmd_free_study',name:'研讀兵書',category:'social',ap:1,goldCost:40,desc:'在野修行：智計未達80時提升1點。',exec(g){g.hero.int+=1;return {title:'研讀兵書',desc:'研習兵法與謀略。',chips:['智計 +1','銀錢 -40']};}},
         {id:'cmd_free_escort',name:'護送旅人',category:'travel',ap:1,desc:'承接地方護送委託，治安至少60時可執行。試行報酬：銀錢60、聲望5。',exec(g){g.gold+=60;g.repute+=5;return {title:'護送旅人',desc:'完成地方短程護送委託。',chips:['銀錢 +60','聲望 +5']};}},
         {id:'cmd_retainer_inspect',name:'巡查營寨',category:'military',ap:1,desc:'奉主命巡查營寨，僅累計指定任務進度。',exec(g){return {title:'巡查營寨',desc:'已完成本次營寨巡查。',chips:['主命進度 +1']};}},
@@ -2946,10 +3011,10 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
           desc: '廣邀州郡名士與行伍豪傑共飲，延攬名將入夥或增進同僚情誼。',
           exec: function (g) {
             const owned = new Set([heroKey(g.hero), ...g.roster.map(heroKey)]);
-            const pool = localHeroPool(g);
+            const pool = localHeroPool(g).filter(h=>!pendingTalentList(g).some(x=>x.id===heroKey(h)));
             if (pool.length > 0) {
               const chosen = chooseTalent(g,pool);
-              return { recruit: chosen, title: '尋訪豪傑', desc: `遇見${chosen.name}，等待你的決定。`, chips: [] };
+              if(chosen) return { recruit: chosen, title: '尋訪豪傑', desc: `遇見${chosen.name}，等待你的決定。`, chips: [] };
             }
             (g.role.id==='C'?(g.companions||[]):g.roster).forEach(function (r) { r.bond = Math.min(100, (r.bond||0) + 6); });
             g.repute += 25;
@@ -2968,31 +3033,7 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
           goldCost: 120,
           desc: '走訪名山大川與古蹟市肆，有機會尋獲神兵利器、兵書或寶物。',
           exec: function (g) {
-            const unowned = TREASURE_DB.filter(function (t) {
-              return g.treasures.indexOf(t.name) === -1;
-            });
-            if (unowned.length > 0) {
-              const tr = unowned[Math.floor(Math.random() * unowned.length)];
-              g.treasures.push(tr.name);
-              if (tr.statBonus) {
-                Object.keys(tr.statBonus).forEach(function (k) {
-                  g.hero[k] = Math.min(100, (g.hero[k] || 70) + tr.statBonus[k]);
-                });
-              }
-              g.repute += 20;
-              return {
-                title: `得獲奇珍 · ${tr.name}`,
-                desc: `你在遊歷途中意外得見「${tr.name}」（${tr.slot}），${tr.bonusText}。`,
-                chips: [`獲得：${tr.name}`, tr.bonusText]
-              };
-            }
-            const gainG = 280;
-            g.gold += gainG;
-            return {
-              title: '遊歷奇遇 · 商賈厚贈',
-              desc: '沿途助商旅解圍，獲贈銀錢與旅途見聞。',
-              chips: [`銀錢 +${gainG}`, '旅途見聞']
-            };
+            return exploreTreasure(g);
           }
         }
       ];
@@ -3005,14 +3046,14 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
       ];
       for(const [id,name,stat,cost] of LIFE_ACTIONS) GAME_COMMANDS.push({id,name,category:'social',ap:1,goldCost:cost,desc:'常規修行提升1點，最高80。',exec(g){g.hero[stat]++;return {title:name,desc:'完成個人修行。',chips:['能力 +1','銀錢 -'+cost]};}});
       const LIFE_JOBS={life_farm:{name:'受僱農作',gold:35,food:15,rep:2,tier:1,roles:['C']},life_scribe:{name:'代書文牘',gold:55,food:0,rep:3,tier:2,roles:['C'],stat:'int',min:50},life_tutor:{name:'授徒講學',gold:80,food:0,rep:5,tier:3,roles:['C'],stat:'cha',min:60},life_trade:{name:'市集估貨',gold:45,food:0,rep:2,tier:1,roles:['D']},life_contract:{name:'商號議價',gold:90,food:0,rep:4,tier:3,roles:['D'],stat:'pol',min:55}};
-      for(const [id,j] of Object.entries(LIFE_JOBS)) GAME_COMMANDS.push({id,name:j.name,category:'social',ap:1,desc:'第'+j.tier+'階起；每旬每項一次，主動工作報酬。',exec(g){g.lifeJobs??={};g.lifeJobs[id]=governanceTurn(g);g.gold+=j.gold;g.food+=j.food;g.repute+=j.rep;return {title:j.name,desc:'完成地方工作。',chips:['銀錢 +'+j.gold,'糧草 +'+j.food,'聲望 +'+j.rep]};}});
+      for(const [id,j] of Object.entries(LIFE_JOBS)) GAME_COMMANDS.push({id,name:j.name,category:'social',ap:1,desc:'第'+j.tier+'階起；主動工作報酬。',exec(g){g.lifeJobs??={};g.lifeJobs[id]=governanceTurn(g);g.gold+=j.gold;g.food+=j.food;g.repute+=j.rep;return {title:j.name,desc:'完成地方工作。',chips:['銀錢 +'+j.gold,'糧草 +'+j.food,'聲望 +'+j.rep]};}});
       // v10.4.1: explicit tier policy; territorial grants remain independent.
-      const TIER_COMMAND_MIN = Object.freeze({A:{cmd_lord_defense:2,cmd_farming:1,cmd_recruit_troops:1},B:{cmd_retainer_inspect:1,cmd_retainer_wall:4,cmd_patrol_city:3,cmd_recruit_troops:3,cmd_drill_army:2,cmd_recruit_hero:2},C:{cmd_free_escort:2},D:{cmd_merchant_guard:2,cmd_merchant_broker:2},E:{cmd_bandit_base:1,cmd_bandit_fortify:2,cmd_bandit_gather:1,cmd_bandit_stock:1,cmd_drill_army:2}});
+      const TIER_COMMAND_MIN = Object.freeze({A:{cmd_lord_defense:2,cmd_farming:1,cmd_recruit_troops:1},B:{cmd_retainer_inspect:1,cmd_retainer_wall:4,cmd_patrol_city:3,cmd_recruit_troops:3,cmd_drill_army:2,cmd_recruit_hero:2},C:{cmd_free_escort:2},D:{cmd_merchant_guard:2,cmd_merchant_broker:2},E:{cmd_bandit_base:3,cmd_bandit_fortify:3,cmd_bandit_gather:3,cmd_bandit_stock:1,cmd_drill_army:2}});
       function tierCommandReason(g,id){const min=TIER_COMMAND_MIN[g.role.id]?.[id]||1;if(careerTier(g).tier<min)return '須達第'+min+'階';const c=g.cities[g.currentCityId];if(g.role.id==='B'&&['cmd_patrol_city','cmd_recruit_troops'].includes(id)){const a=activeOffice(g);if(!a||a.cityId!==c?.id||!officeDefinition(a.officeId).requiresTerritoryForTerritorialPowers)return '須有正式地方官任命及轄地授權';}if(g.role.id==='A'&&id==='cmd_recruit_troops'&&c?.owner!=='PLAYER')return '須在直轄城池募兵';return '';}
-      const EXTRA_CAREER_JOBS={career_a_accounts:{name:'核閱府庫帳冊',roles:['A'],tier:2,stat:'pol',min:55,gold:0,food:0,rep:4},career_b_documents:{name:'整理幕府文書',roles:['B'],tier:1,stat:'int',min:40,gold:25,food:0,rep:2},career_c_lecture:{name:'遊學論策',roles:['C'],tier:4,stat:'int',min:65,gold:100,food:0,rep:6},career_c_master:{name:'名士講席',roles:['C'],tier:5,stat:'cha',min:70,gold:140,food:0,rep:8},career_d_accounts:{name:'商號清帳',roles:['D'],tier:4,stat:'pol',min:60,gold:120,food:0,rep:4},career_d_network:{name:'商會議事',roles:['D'],tier:5,stat:'cha',min:65,gold:150,food:0,rep:6},career_e_scout:{name:'山道探查',roles:['E'],tier:3,stat:'cmd',min:50,gold:0,food:0,rep:4}};
-      for(const [id,j] of Object.entries(EXTRA_CAREER_JOBS)){LIFE_JOBS[id]=j;GAME_COMMANDS.push({id,name:j.name,category:'social',ap:1,desc:'第'+j.tier+'階起，每旬一次。',exec(g){g.lifeJobs??={};g.lifeJobs[id]=governanceTurn(g);g.gold+=j.gold;g.food+=j.food;g.repute+=j.rep;return {title:j.name,desc:'完成身分專屬工作。',chips:['銀錢 +'+j.gold,'聲望 +'+j.rep]};}});}
+      const EXTRA_CAREER_JOBS={career_a_audience:{name:"接見地方人士",roles:["A"],tier:1,gold:0,food:0,rep:2},career_b_drill:{name:"校場練武",roles:["B"],tier:1,gold:0,food:0,rep:2},career_e_watch:{name:"巡山值守",roles:["E"],tier:1,gold:20,food:5,rep:1},career_e_patrol:{name:"帶隊巡山",roles:["E"],tier:2,gold:35,food:10,rep:2},career_d_stall:{name:"擺攤販售",roles:["D"],tier:1,gold:25,food:0,rep:1},career_a_accounts:{name:'核閱府庫帳冊',roles:['A'],tier:2,stat:'pol',min:55,gold:0,food:0,rep:4},career_b_documents:{name:'整理幕府文書',roles:['B'],tier:1,stat:'int',min:40,gold:25,food:0,rep:2},career_c_lecture:{name:'遊學論策',roles:['C'],tier:4,stat:'int',min:65,gold:100,food:0,rep:6},career_c_master:{name:'名士講席',roles:['C'],tier:5,stat:'cha',min:70,gold:140,food:0,rep:8},career_d_accounts:{name:'商號清帳',roles:['D'],tier:4,stat:'pol',min:60,gold:120,food:0,rep:4},career_d_network:{name:'商會議事',roles:['D'],tier:5,stat:'cha',min:65,gold:150,food:0,rep:6},career_e_scout:{name:'山道探查',roles:['E'],tier:3,stat:'cmd',min:50,gold:0,food:0,rep:4}};
+      for(const [id,j] of Object.entries(EXTRA_CAREER_JOBS)){LIFE_JOBS[id]=j;GAME_COMMANDS.push({id,name:j.name,category:'social',ap:1,desc:'第'+j.tier+'階起，依AP執行。',exec(g){g.lifeJobs??={};g.lifeJobs[id]=governanceTurn(g);g.gold+=j.gold;g.food+=j.food;g.repute+=j.rep;return {title:j.name,desc:'完成身分專屬工作。',chips:['銀錢 +'+j.gold,'聲望 +'+j.rep]};}});}
       function roleHasCommand(g,id){return !!g&&(ROLE_COMMAND_ACCESS[g.role.id]?.includes(id)||LIFE_ACTIONS.some(x=>x[0]===id)||LIFE_JOBS[id]?.roles.includes(g.role.id));}
-      function lifeCommandReason(g,id){const a=LIFE_ACTIONS.find(x=>x[0]===id),j=LIFE_JOBS[id];if(a)return Number.isInteger(g.hero[a[2]])&&g.hero[a[2]]<80?'':'常規修行已達80上限';if(j){if(careerTier(g).tier<j.tier)return '須達第'+j.tier+'階';if(j.stat&&g.hero[j.stat]<j.min)return '能力不足（需 '+j.min+'）';if(g.lifeJobs?.[id]===governanceTurn(g))return '本旬已完成';if(g.gold>Number.MAX_SAFE_INTEGER-1000050||g.food>Number.MAX_SAFE_INTEGER-1000050||g.repute>Number.MAX_SAFE_INTEGER-1000050)return '資源已達安全上限';}return '';}
+      function lifeCommandReason(g,id){const a=LIFE_ACTIONS.find(x=>x[0]===id),j=LIFE_JOBS[id];if(a)return Number.isInteger(g.hero[a[2]])&&g.hero[a[2]]<80?'':'常規修行已達80上限';if(j){if(careerTier(g).tier<j.tier)return '須達第'+j.tier+'階';if(j.stat&&g.hero[j.stat]<j.min)return '能力不足（需 '+j.min+'）';if(g.gold>Number.MAX_SAFE_INTEGER-1000050||g.food>Number.MAX_SAFE_INTEGER-1000050||g.repute>Number.MAX_SAFE_INTEGER-1000050)return '資源已達安全上限';}return '';}
       function commandBlockReason(g,id){if(!roleHasCommand(g,id))return '身分不符';if(independentBattle(g))return '戰役期間不可執行';if(storyBusy()||pendingRecruit||g.mutinyPending)return '須先處理當前事件';const tierReason=tierCommandReason(g,id);if(tierReason)return tierReason;const life=lifeCommandReason(g,id);if(life)return life;if(commandAllowed(g,id))return '';const reasons={cmd_recruit_hero:'同伴已滿（最多兩名）',cmd_personal_training:'武勇已達常規上限',cmd_free_study:'智計已達常規上限',cmd_drill_army:'沒有可訓練兵員',cmd_bandit_base:'已有山寨',cmd_bandit_fortify:'須在山寨且寨防未滿',cmd_bandit_gather:'寨眾已達階級上限',cmd_retainer_inspect:'須有有效巡查主命並位於主公領地',cmd_retainer_wall:'須具正式轄地官職且城防未滿',cmd_lord_defense:'須為直轄城池且城防未滿',cmd_farming:'須為直轄城池',cmd_patrol_city:'須具所在地治理權',cmd_recruit_troops:'須具募兵權限',cmd_free_escort:'所在地治安不足60',cmd_merchant_guard:'商隊執行中、銀錢不足或鏢師已滿',cmd_merchant_broker:'市場或治安條件不足'};return reasons[id]||'未符合執行條件';}
       function banditCap(g){return [500,1500,4000,10000,25000][careerTier(g).tier-1];}
       function commandAllowed(g,id){
@@ -3042,20 +3083,42 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
         if(id==='cmd_recruit_troops'&&g.role.id==='B')return orderLiege(g)&&c.owner===g.liegeFaction;
         return true;
       }
-      function launchGame() {
+      function openOpeningMap(tier){
+        openInfo('選擇起始據點（現有地理資料）',body=>{
+          document.getElementById('info-modal').classList.add('world-map-full');
+          const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 1000 800');svg.style.cssText='width:100%;min-width:600px;background:#e7dec3';const wrap=document.createElement('div');wrap.style.overflow='auto';wrap.append(svg);body.append(wrap);
+          const details=document.createElement('div');body.append(details);details.textContent='點擊城池選擇；有主城池加入勢力，無主城池建立勢力。';
+          for(const c of scenarioCities(setupCfg.year)){const x=40+c.x*9.2,y=40+c.y*7.2;const group=document.createElementNS(ns,'g');group.setAttribute('tabindex','0');group.setAttribute('role','button');group.setAttribute('aria-label',c.name);group.style.cursor='pointer';const dot=document.createElementNS(ns,'circle');dot.setAttribute('cx',x);dot.setAttribute('cy',y);dot.setAttribute('r',12);dot.setAttribute('fill',c.owner==='無主'?'#777':'#795b3e');const text=document.createElementNS(ns,'text');text.setAttribute('x',x);text.setAttribute('y',y+25);text.setAttribute('text-anchor','middle');text.setAttribute('font-size','17');text.textContent=c.name;group.append(dot,text);svg.append(group);
+          const pick=()=>{details.replaceChildren();const p=document.createElement('p');p.textContent=c.name+'｜'+c.owner;details.append(p);const b=document.createElement('button');b.className='btn-primary-ink p-3';b.textContent=c.owner==='無主'?'建立勢力':'加入'+c.owner;b.onclick=()=>{const next=c.owner==='無主'?'A':'B';setupCfg.roleId=next;setupCfg.roleManual=true;document.getElementById('info-modal').classList.add('hidden');if(next==='B'&&tier===1){openInfo('選擇臣屬初始階級',box=>{CAREER_SOURCE.OFFICIAL_GOVERNANCE_V2.identityTiers.B.slice(0,3).forEach((r,i)=>{const k=document.createElement('button');k.className='btn-secondary-ink w-full p-3';k.textContent=r.progressionLabel;k.onclick=()=>{document.getElementById('info-modal').classList.add('hidden');launchGame(i+1,c.id);};box.append(k);});});}else launchGame(tier,c.id);};details.append(b);};group.onclick=pick;group.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();pick();}};}
+        });
+      }
+      function launchGame(openingTier, openingCity) {
+        const route=getCurrentRoleObj().id;
+        if(setupCfg.charMode==='custom' && ['B','D','E'].includes(route) && !Number.isInteger(openingTier)){
+          openInfo('選擇初始階級',body=>{
+            const names=CAREER_SOURCE.OFFICIAL_GOVERNANCE_V2.identityTiers[route];
+            names.slice(0,3).forEach((r,i)=>{const b=document.createElement('button');b.className='btn-secondary-ink w-full p-3 mb-2';b.textContent=(route==='E'?['小賊','巡山小校','小頭目'][i]:r.progressionLabel)+' · '+CAREER_AP[route][i]+' AP';b.onclick=()=>{document.getElementById('info-modal').classList.add('hidden');launchGame(i+1);};body.append(b);});
+          });return;
+        }
+        const tier=Number.isInteger(openingTier)&&setupCfg.charMode==='custom'&&['B','D','E'].includes(route)?Math.max(1,Math.min(3,openingTier)):1;
         const script = SCENARIO_SCRIPTS[setupCfg.year] || SCENARIO_SCRIPTS[184];
         const heroObj = cloneObj(getCurrentSetupHero());
         const roleObj = cloneObj(getCurrentRoleObj());
-        const startCityId = heroObj.city || 'xuchang';
-        const startCity = TKGeoEngine.getCity(startCityId);
+        if(!heroObj._isCustom&&!availableHero(heroObj,script.year)){showResult('無法開局','人物不在劇本活動年代','請選擇其他人物或劇本。',[]);return;}
+        if(heroObj._isCustom&&['A','B'].includes(route)&&!openingCity){openOpeningMap(tier);return;}
+        const openingWorld=scenarioCities(script.year);const ruler=heroObj._isCustom?null:openingRulerFaction(heroObj,script.year);const service=heroObj._isCustom?null:openingService(heroObj,script.year,Object.fromEntries(openingWorld.map(c=>[c.id,c])));
+        const startCityId = openingCity || (ruler?openingWorld.find(c=>c.owner===ruler)?.id:null) || service?.id || heroObj.city || 'xuchang';
+        heroObj.city=startCityId;
+        const startCity = openingWorld.find(c=>c.id===startCityId);if(!startCity){showResult('無法開局','起始據點不存在','請重新選擇據點。',[]);return;}
 
         const bgBonus = heroObj._bg && heroObj._bg.bonus ? heroObj._bg.bonus : {};
         const citiesMap = {};
-        TKGeoEngine.getAllCities().forEach(function (c) {
+        openingWorld.forEach(function (c) {
           citiesMap[c.id] = {
             id: c.id,
             name: c.name,
             province: c.province,
+            x:c.x,y:c.y,
             owner: c.owner,
             clan: c.clan,
             defender: c.defender,
@@ -3093,32 +3156,42 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
           scriptTitle: script.title,
           chapters: cloneObj(script.chapters || []),
           chapterIdx: 0,
-          month: 1,
+          month: OPENING_MONTH[script.year]||1,
           tenDay: 1, // 1=上旬, 2=中旬, 3=下旬
           hero: heroObj,
           role: roleObj,
           destiny: DESTINY_POOL[Math.floor(Math.random() * DESTINY_POOL.length)],
           doctrine: LEGION_DOCTRINES[Math.floor(Math.random() * LEGION_DOCTRINES.length)],
           currentCityId: startCity.id,
-          ap: CAREER_AP[roleObj.id][0],
-          maxAp: CAREER_AP[roleObj.id][0],
+          career: {route:roleObj.id,tier},
+          ap: CAREER_AP[roleObj.id][tier-1],
+          maxAp: CAREER_AP[roleObj.id][tier-1],
           gold: roleObj.base.gold + (bgBonus.gold || 0),
           food: roleObj.base.food + (bgBonus.food || 0),
           troops: roleObj.id==='C'?0:roleObj.base.troops + (bgBonus.troops || 0),
           repute: roleObj.base.repute + (bgBonus.repute || 0),
           morale: 100, hungerTurns: 0,
-          treasures: [TREASURE_DB[0].name],
-          roster: roleObj.id==='C'?[]:initialRoster, companions:[],
+          treasures: [], discoveredTreasures: [], discoveredHeroes: [],
+          roster: [], companions:[],
           cities: citiesMap,
           logs: [
-            `【${script.year}年·正月上旬】${heroObj.name}以「${roleObj.code}」身分於${startCity.name}（${startCity.province}）啟程。`,
+            `【${script.year}年·${OPENING_MONTH[script.year]||1}月上旬】${heroObj.name}以「${roleObj.code}」身分於${startCity.name}（${startCity.province}）啟程。`,
             `天命批註：待初始化`
           ]
         };
 
         game.logs[1] = `天命批註：${game.destiny}`;
+        if(heroObj._isCustom&&['B','D','E'].includes(roleObj.id)){
+          const factor=[.25,.55,1][tier-1];game.gold=Math.max(0,Math.floor(game.gold*factor));game.food=Math.max(0,Math.floor(game.food*factor));game.repute=Math.floor(game.repute*factor);
+          game.troops=roleObj.id==='D'?0:roleObj.id==='E'?[0,50,200][tier-1]:[0,50,200][tier-1];
+        }
+        if(heroObj._isCustom&&roleObj.id==='A'&&startCity.owner==='無主'){game.cities[startCityId].owner='PLAYER';game.cities[startCityId].defender=heroObj.name;game.cities[startCityId].garrison=0;}
+
         // Trial: explicit B opening affiliation to local scenario owner, not historical attribution.
-        if(roleObj.id==='B' && startCity.owner && startCity.owner!=='PLAYER'){game.liegeFaction=startCity.owner;game.logs.unshift('【臣屬開局】試行投效所在地勢力：'+game.liegeFaction);}
+        if(roleObj.id==='B' && startCity.owner && startCity.owner!=='PLAYER'&&startCity.owner!=='無主'){game.liegeFaction=(!heroObj._isCustom&&openingService(heroObj,script.year,citiesMap)?.owner)||startCity.owner;game.logs.unshift('【臣屬開局】試行投效所在地勢力：'+game.liegeFaction);}
+
+        seedOpeningService(game);
+        if(roleObj.id==='A'&&ruler){for(const c of Object.values(game.cities))if(c.owner===ruler)c.owner='PLAYER';for(const c of Object.values(game.cities))if(c.defender===heroObj.name)c.defender='';game.cities[startCityId].defender=heroObj.name;for(const x of Object.values(game.personGeo.people)){if(x.faction!==ruler)continue;const h=heroIdentity.get(x.id);if(h&&availableHero(h,game.year)&&heroKey(h)!==heroKey(heroObj)){game.roster.push({...h,bond:68,loyalty:72});x.faction='PLAYER';}}}
 
         document.getElementById('setup-screen').classList.add('hidden');
         document.getElementById('game-screen').classList.remove('hidden');
@@ -3127,7 +3200,7 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
         if(game.role.id==='B')drainStory();
       }
 
-      const CAREER_SOURCE = {"OFFICIAL_RANKS":{"A":[{"tier":1,"title":"鄉里義軍首領","salary":10,"power":"統領基礎義軍（未成城主前無領地月稅）","rankId":"A1","identityRoute":"A","rankKind":"formal_office_candidate","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":2,"title":"雜號校尉/起事渠帥","salary":25,"power":"招募正規公兵、頒布求賢令（攻城成為城主後解鎖領地月稅）","rankId":"A2","identityRoute":"A","rankKind":"formal_office_candidate","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":3,"title":"討虜中郎將/一郡太守","salary":60,"power":"正式受封城主、享領地月度稅賦與跨郡征伐","rankId":"A3","identityRoute":"A","rankKind":"formal_office_candidate","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":4,"title":"州牧/四征將軍","salary":110,"power":"統轄多州軍政、任免重臣、奉迎朝廷","rankId":"A4","identityRoute":"A","rankKind":"formal_office_candidate","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":5,"title":"丞相大將軍/霸府盟主","salary":180,"power":"建立王朝制度、立嗣傳承、問鼎天下","rankId":"A5","identityRoute":"A","rankKind":"formal_office_candidate","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"}],"B":[{"tier":1,"title":"軍前小校/伍長","salary":12,"power":"統領少量部曲、領受基礎差遣（無領地月稅）","rankId":"B1","identityRoute":"B","rankKind":"formal_office_candidate","appointmentRequired":true,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":2,"title":"別部司馬/校尉","salary":28,"power":"指揮正規部隊、軍議建言左右國策","rankId":"B2","identityRoute":"B","rankKind":"formal_office_candidate","appointmentRequired":true,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":3,"title":"中郎將/偏將軍","salary":55,"power":"統領多支軍隊、奉命出征攻城","rankId":"B3","identityRoute":"B","rankKind":"formal_office_candidate","appointmentRequired":true,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":4,"title":"一郡太守（城主級）","salary":95,"power":"獲封直轄城池成為城主、享領地月度稅收與舉旗易幟","rankId":"B4","identityRoute":"B","rankKind":"formal_office_candidate","appointmentRequired":true,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":5,"title":"刺史州牧/大將軍（開府重臣）","salary":160,"power":"開府治事、執掌一方軍政大權","rankId":"B5","identityRoute":"B","rankKind":"formal_office_candidate","appointmentRequired":true,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"}],"C":[{"tier":1,"title":"無名浪人/鄉閭遊俠","salary":0,"power":"獨行雲遊、接取單人懸賞（無強制結局）","rankId":"C1","identityRoute":"C","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":2,"title":"知名劍客/遊方名士","salary":0,"power":"武場踢館單挑、結交四海豪傑","rankId":"C2","identityRoute":"C","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":3,"title":"當世豪客/隱逸先生","salary":0,"power":"開宗立派建立劍館／書院招收門徒","rankId":"C3","identityRoute":"C","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":4,"title":"海內宗師/傳奇大俠","salary":0,"power":"參加天下演武大會角逐天下第一","rankId":"C4","identityRoute":"C","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":5,"title":"天下第一劍聖/千古名士","salary":0,"power":"逍遙九州、不仕王侯而名垂青史","rankId":"C5","identityRoute":"C","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"}],"D":[{"tier":1,"title":"行商貨郎","salary":0,"power":"本地採辦特產（未設支店前無被動分紅）","rankId":"D1","identityRoute":"D","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":2,"title":"街鋪掌櫃","salary":0,"power":"跨州遠途販運、籌資開設首間支店","rankId":"D2","identityRoute":"D","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":3,"title":"多郡連號東家","salary":0,"power":"設立全國支店享每月被動分紅、雇兵代打","rankId":"D3","identityRoute":"D","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":4,"title":"跨州大商幫主","salary":0,"power":"捐餉御用金牌、投資城邑商業、資助諸侯","rankId":"D4","identityRoute":"D","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":5,"title":"禦用皇商/全國商幫總管","salary":0,"power":"掌控九州商路命脈、以財力左右諸侯興衰","rankId":"D5","identityRoute":"D","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"}],"E":[{"tier":1,"title":"山林草寇頭目","salary":0,"power":"要道設卡抽買路錢、招募亡命","rankId":"E1","identityRoute":"E","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":2,"title":"支寨寨主","salary":0,"power":"夜襲塢堡劫糧、修築忠義堂與煉鐵爐","rankId":"E2","identityRoute":"E","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":3,"title":"險阻總舵主","salary":0,"power":"劫法場營救落難名將、遣使受封招安","rankId":"E3","identityRoute":"E","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":4,"title":"連寨大帥/黑山盟主","salary":0,"power":"號令太行綠林連寨、劫富濟貧立俠名","rankId":"E4","identityRoute":"E","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":5,"title":"混天霸王/綠林天王","salary":0,"power":"雄踞山河、連朝廷與群雄亦不敢輕犯","rankId":"E5","identityRoute":"E","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"}]},"OFFICIAL_GOVERNANCE_V2":{"status":"REVIEW_NOT_ENGINE_CONNECTED","designNotes":["新增資料是遊戲規則草案，非東漢官制史實等級表","原 OFFICIAL_RANKS 欄位與數值完全保留","官職、轄地、兵權及薪俸分開管理；不以階級自動授予轄地","薪俸週期、軍功門檻及主程式狀態鍵待引擎核對"],"identityTiers":{"A":[{"rankId":"A1","route":"A","routeName":"天下君主","tier":1,"progressionLabel":"義軍統領","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"A2","route":"A","routeName":"天下君主","tier":2,"progressionLabel":"起事領袖","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"A3","route":"A","routeName":"天下君主","tier":3,"progressionLabel":"一郡割據者","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"A4","route":"A","routeName":"天下君主","tier":4,"progressionLabel":"州域霸主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"A5","route":"A","routeName":"天下君主","tier":5,"progressionLabel":"霸府盟主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"}],"B":[{"rankId":"B1","route":"B","routeName":"幕府臣屬","tier":1,"progressionLabel":"基層軍吏","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"B2","route":"B","routeName":"幕府臣屬","tier":2,"progressionLabel":"部隊指揮官","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"B3","route":"B","routeName":"幕府臣屬","tier":3,"progressionLabel":"方面將領","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"B4","route":"B","routeName":"幕府臣屬","tier":4,"progressionLabel":"郡級重臣","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"B5","route":"B","routeName":"幕府臣屬","tier":5,"progressionLabel":"州級重臣","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"}],"C":[{"rankId":"C1","route":"C","routeName":"天下在野","tier":1,"progressionLabel":"浪人遊俠","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"C2","route":"C","routeName":"天下在野","tier":2,"progressionLabel":"知名豪客","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"C3","route":"C","routeName":"天下在野","tier":3,"progressionLabel":"門派宗師","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"C4","route":"C","routeName":"天下在野","tier":4,"progressionLabel":"海內名宿","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"C5","route":"C","routeName":"天下在野","tier":5,"progressionLabel":"天下名士","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"}],"D":[{"rankId":"D1","route":"D","routeName":"豪商巨賈","tier":1,"progressionLabel":"行商","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"D2","route":"D","routeName":"豪商巨賈","tier":2,"progressionLabel":"店主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"D3","route":"D","routeName":"豪商巨賈","tier":3,"progressionLabel":"商號東家","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"D4","route":"D","routeName":"豪商巨賈","tier":4,"progressionLabel":"跨州商幫","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"D5","route":"D","routeName":"豪商巨賈","tier":5,"progressionLabel":"全國商幫","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"}],"E":[{"rankId":"E1","route":"E","routeName":"綠林山寨","tier":1,"progressionLabel":"草寇頭目","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"E2","route":"E","routeName":"綠林山寨","tier":2,"progressionLabel":"支寨寨主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"E3","route":"E","routeName":"綠林山寨","tier":3,"progressionLabel":"連寨總舵","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"E4","route":"E","routeName":"綠林山寨","tier":4,"progressionLabel":"山寨盟主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"E5","route":"E","routeName":"綠林山寨","tier":5,"progressionLabel":"綠林霸主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"}]},"offices":[{"officeId":"B_OFF_01","title":"伍長","route":"B","minimumTierCandidate":1,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_02","title":"軍前小校","route":"B","minimumTierCandidate":1,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_03","title":"別部司馬","route":"B","minimumTierCandidate":2,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_04","title":"校尉","route":"B","minimumTierCandidate":2,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_05","title":"中郎將","route":"B","minimumTierCandidate":3,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_06","title":"偏將軍","route":"B","minimumTierCandidate":3,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_07","title":"太守","route":"B","minimumTierCandidate":4,"domain":"civil_military","requiresTerritoryForTerritorialPowers":true,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_08","title":"刺史","route":"B","minimumTierCandidate":5,"domain":"civil","requiresTerritoryForTerritorialPowers":true,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_09","title":"州牧","route":"B","minimumTierCandidate":5,"domain":"civil_military","requiresTerritoryForTerritorialPowers":true,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_10","title":"大將軍","route":"B","minimumTierCandidate":5,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_01","title":"雜號校尉","route":"A","minimumTierCandidate":2,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_02","title":"討虜中郎將","route":"A","minimumTierCandidate":3,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_03","title":"太守","route":"A","minimumTierCandidate":3,"domain":"civil_military","requiresTerritoryForTerritorialPowers":true,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_04","title":"州牧","route":"A","minimumTierCandidate":4,"domain":"civil_military","requiresTerritoryForTerritorialPowers":true,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_05","title":"四征將軍","route":"A","minimumTierCandidate":4,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_06","title":"丞相","route":"A","minimumTierCandidate":5,"domain":"civil_military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_07","title":"大將軍","route":"A","minimumTierCandidate":5,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"}],"appointmentRecordSchema":{"holderId":"string","officeId":"string|null","appointmentType":["正式任命","代理任命","自署職銜","無官職"],"appointingFactionId":"string|null","appointingCharacterId":"string|null","jurisdictionCityIds":"string[]","jurisdictionRegionIds":"string[]","commandUnitIds":"string[]","validFromTurn":"integer|null","validUntilTurn":"integer|null","status":["active","suspended","revoked","expired"]},"permissions":{"governCity":{"requires":["active_office_or_faction_ruler","city_control_or_delegation"],"neverGrantedBy":["identity_tier_alone"]},"commandArmy":{"requires":["active_command_assignment","assigned_units"],"neverGrantedBy":["office_title_alone"]},"collectTerritoryRevenue":{"requires":["controlled_city","tax_authority"],"neverGrantedBy":["tier_or_office_title_alone"]},"appointSubordinates":{"requires":["appointment_authority","valid_target_scope"],"neverGrantedBy":["identity_tier_alone"]},"raiseBannerB05":{"requires":["route_B","tier_at_least_4","B05_action_unlocked","engine_scenario_preconditions"],"apCost":"use_existing_command_rules_only","onSuccess":"route_change_to_A_pending_engine_mapping"}},"promotionFlow":["檢查當前 A–E 路線與階級","讀取既有軍功/資產/聲望等門檻，不新增未驗證數值","判定升階資格","B 路線透過主公評定或任命取得實職，不能自動獲封轄地","獨立檢查轄地、兵權、薪俸及任務指派","產生可追溯的狀態變更記錄"],"appointmentLifecycle":["nominate","review","appoint_or_acting","delegate_scope","evaluate","promote_transfer_dismiss_or_expire"],"evaluationRules":{"routeB":"主公評定視窗依既有時機強制觸發；任務需明確期限與獎懲","routeA":"自主政務評定，不套用 B 的主公召見","routesCDE":"各自社會地位進階，不自動轉為官職","endTurnEvents":"不額外扣除已耗盡的 AP"},"crossRouteTransitions":{"B_to_A":"僅在既有 B-05 或其他經確認的合法轉換條件達成後","C_to_A":"奪城後按既有規則強制轉 A","D_to_A":"依既有塢堡與資產條件判定","E_to_B":"招安後依既有規則轉 B"},"openQuestions":["軍功/資產/名望的各階確切門檻","薪俸週期與支付主體","主程式內評定、任命、城池所有權的真實欄位","不同劇本對官職可用性的限制","A 路線官銜是否為朝廷授官或自署"]}};
+      const CAREER_SOURCE = {"OFFICIAL_RANKS":{"A":[{"tier":1,"title":"鄉里義軍首領","salary":10,"power":"統領基礎義軍（未成城主前無領地月稅）","rankId":"A1","identityRoute":"A","rankKind":"formal_office_candidate","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":2,"title":"雜號校尉/起事渠帥","salary":25,"power":"招募正規公兵、頒布求賢令（攻城成為城主後解鎖領地月稅）","rankId":"A2","identityRoute":"A","rankKind":"formal_office_candidate","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":3,"title":"討虜中郎將/一郡太守","salary":60,"power":"正式受封城主、享領地月度稅賦與跨郡征伐","rankId":"A3","identityRoute":"A","rankKind":"formal_office_candidate","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":4,"title":"州牧/四征將軍","salary":110,"power":"統轄多州軍政、任免重臣、奉迎朝廷","rankId":"A4","identityRoute":"A","rankKind":"formal_office_candidate","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":5,"title":"丞相大將軍/霸府盟主","salary":180,"power":"建立王朝制度、立嗣傳承、問鼎天下","rankId":"A5","identityRoute":"A","rankKind":"formal_office_candidate","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"}],"B":[{"tier":1,"title":"軍前小校/伍長","salary":12,"power":"統領少量部曲、領受基礎差遣（無領地月稅）","rankId":"B1","identityRoute":"B","rankKind":"formal_office_candidate","appointmentRequired":true,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":2,"title":"別部司馬/校尉","salary":28,"power":"指揮正規部隊、軍議建言左右國策","rankId":"B2","identityRoute":"B","rankKind":"formal_office_candidate","appointmentRequired":true,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":3,"title":"中郎將/偏將軍","salary":55,"power":"統領多支軍隊、奉命出征攻城","rankId":"B3","identityRoute":"B","rankKind":"formal_office_candidate","appointmentRequired":true,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":4,"title":"一郡太守（城主級）","salary":95,"power":"獲封直轄城池成為城主、享領地月度稅收與舉旗易幟","rankId":"B4","identityRoute":"B","rankKind":"formal_office_candidate","appointmentRequired":true,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":5,"title":"刺史州牧/大將軍（開府重臣）","salary":160,"power":"開府治事、執掌一方軍政大權","rankId":"B5","identityRoute":"B","rankKind":"formal_office_candidate","appointmentRequired":true,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"}],"C":[{"tier":1,"title":"無名浪人/鄉閭遊俠","salary":0,"power":"獨行雲遊、接取單人懸賞（無強制結局）","rankId":"C1","identityRoute":"C","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":2,"title":"知名劍客/遊方名士","salary":0,"power":"武場踢館單挑、結交四海豪傑","rankId":"C2","identityRoute":"C","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":3,"title":"當世豪客/隱逸先生","salary":0,"power":"開宗立派建立劍館／書院招收門徒","rankId":"C3","identityRoute":"C","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":4,"title":"海內宗師/傳奇大俠","salary":0,"power":"參加天下演武大會角逐天下第一","rankId":"C4","identityRoute":"C","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":5,"title":"天下第一劍聖/千古名士","salary":0,"power":"逍遙九州、不仕王侯而名垂青史","rankId":"C5","identityRoute":"C","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"}],"D":[{"tier":1,"title":"行商貨郎","salary":0,"power":"本地採辦特產（未設支店前無被動分紅）","rankId":"D1","identityRoute":"D","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":2,"title":"街鋪掌櫃","salary":0,"power":"跨州遠途販運、籌資開設首間支店","rankId":"D2","identityRoute":"D","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":3,"title":"多郡連號東家","salary":0,"power":"設立全國支店享每月被動分紅、雇兵代打","rankId":"D3","identityRoute":"D","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":4,"title":"跨州大商幫主","salary":0,"power":"捐餉御用金牌、投資城邑商業、資助諸侯","rankId":"D4","identityRoute":"D","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":5,"title":"禦用皇商/全國商幫總管","salary":0,"power":"掌控九州商路命脈、以財力左右諸侯興衰","rankId":"D5","identityRoute":"D","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"}],"E":[{"tier":1,"title":"小賊","salary":0,"power":"要道設卡抽買路錢、招募亡命","rankId":"E1","identityRoute":"E","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":2,"title":"巡山小校","salary":0,"power":"夜襲塢堡劫糧、修築忠義堂與煉鐵爐","rankId":"E2","identityRoute":"E","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":3,"title":"小頭目","salary":0,"power":"劫法場營救落難名將、遣使受封招安","rankId":"E3","identityRoute":"E","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":4,"title":"連寨大帥/黑山盟主","salary":0,"power":"號令太行綠林連寨、劫富濟貧立俠名","rankId":"E4","identityRoute":"E","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"},{"tier":5,"title":"混天霸王/綠林天王","salary":0,"power":"雄踞山河、連朝廷與群雄亦不敢輕犯","rankId":"E5","identityRoute":"E","rankKind":"social_status","appointmentRequired":false,"salaryUnit":"UNVERIFIED","permissionsStatus":"pending_engine_mapping"}]},"OFFICIAL_GOVERNANCE_V2":{"status":"REVIEW_NOT_ENGINE_CONNECTED","designNotes":["新增資料是遊戲規則草案，非東漢官制史實等級表","原 OFFICIAL_RANKS 欄位與數值完全保留","官職、轄地、兵權及薪俸分開管理；不以階級自動授予轄地","薪俸週期、軍功門檻及主程式狀態鍵待引擎核對"],"identityTiers":{"A":[{"rankId":"A1","route":"A","routeName":"天下君主","tier":1,"progressionLabel":"義軍統領","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"A2","route":"A","routeName":"天下君主","tier":2,"progressionLabel":"起事領袖","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"A3","route":"A","routeName":"天下君主","tier":3,"progressionLabel":"一郡割據者","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"A4","route":"A","routeName":"天下君主","tier":4,"progressionLabel":"州域霸主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"A5","route":"A","routeName":"天下君主","tier":5,"progressionLabel":"霸府盟主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"}],"B":[{"rankId":"B1","route":"B","routeName":"幕府臣屬","tier":1,"progressionLabel":"基層軍吏","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"B2","route":"B","routeName":"幕府臣屬","tier":2,"progressionLabel":"部隊指揮官","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"B3","route":"B","routeName":"幕府臣屬","tier":3,"progressionLabel":"方面將領","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"B4","route":"B","routeName":"幕府臣屬","tier":4,"progressionLabel":"郡級重臣","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"B5","route":"B","routeName":"幕府臣屬","tier":5,"progressionLabel":"州級重臣","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"}],"C":[{"rankId":"C1","route":"C","routeName":"天下在野","tier":1,"progressionLabel":"浪人遊俠","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"C2","route":"C","routeName":"天下在野","tier":2,"progressionLabel":"知名豪客","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"C3","route":"C","routeName":"天下在野","tier":3,"progressionLabel":"門派宗師","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"C4","route":"C","routeName":"天下在野","tier":4,"progressionLabel":"海內名宿","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"C5","route":"C","routeName":"天下在野","tier":5,"progressionLabel":"天下名士","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"}],"D":[{"rankId":"D1","route":"D","routeName":"豪商巨賈","tier":1,"progressionLabel":"行商","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"D2","route":"D","routeName":"豪商巨賈","tier":2,"progressionLabel":"店主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"D3","route":"D","routeName":"豪商巨賈","tier":3,"progressionLabel":"商號東家","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"D4","route":"D","routeName":"豪商巨賈","tier":4,"progressionLabel":"跨州商幫","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"D5","route":"D","routeName":"豪商巨賈","tier":5,"progressionLabel":"全國商幫","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"}],"E":[{"rankId":"E1","route":"E","routeName":"綠林山寨","tier":1,"progressionLabel":"小賊","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"E2","route":"E","routeName":"綠林山寨","tier":2,"progressionLabel":"巡山小校","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"E3","route":"E","routeName":"綠林山寨","tier":3,"progressionLabel":"小頭目","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"E4","route":"E","routeName":"綠林山寨","tier":4,"progressionLabel":"山寨盟主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"},{"rankId":"E5","route":"E","routeName":"綠林山寨","tier":5,"progressionLabel":"綠林霸主","formalOfficeRequiredForTier":false,"promotionRulesStatus":"pending_source_threshold_verification"}]},"offices":[{"officeId":"B_OFF_01","title":"伍長","route":"B","minimumTierCandidate":1,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_02","title":"軍前小校","route":"B","minimumTierCandidate":1,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_03","title":"別部司馬","route":"B","minimumTierCandidate":2,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_04","title":"校尉","route":"B","minimumTierCandidate":2,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_05","title":"中郎將","route":"B","minimumTierCandidate":3,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_06","title":"偏將軍","route":"B","minimumTierCandidate":3,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_07","title":"太守","route":"B","minimumTierCandidate":4,"domain":"civil_military","requiresTerritoryForTerritorialPowers":true,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_08","title":"刺史","route":"B","minimumTierCandidate":5,"domain":"civil","requiresTerritoryForTerritorialPowers":true,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_09","title":"州牧","route":"B","minimumTierCandidate":5,"domain":"civil_military","requiresTerritoryForTerritorialPowers":true,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"B_OFF_10","title":"大將軍","route":"B","minimumTierCandidate":5,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":true,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_01","title":"雜號校尉","route":"A","minimumTierCandidate":2,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_02","title":"討虜中郎將","route":"A","minimumTierCandidate":3,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_03","title":"太守","route":"A","minimumTierCandidate":3,"domain":"civil_military","requiresTerritoryForTerritorialPowers":true,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_04","title":"州牧","route":"A","minimumTierCandidate":4,"domain":"civil_military","requiresTerritoryForTerritorialPowers":true,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_05","title":"四征將軍","route":"A","minimumTierCandidate":4,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_06","title":"丞相","route":"A","minimumTierCandidate":5,"domain":"civil_military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"},{"officeId":"A_OFF_07","title":"大將軍","route":"A","minimumTierCandidate":5,"domain":"military","requiresTerritoryForTerritorialPowers":false,"appointmentRequired":false,"isHistoricalOfficeLabel":true,"eraAndAuthorityStatus":"requires_historical_and_engine_review","grantEffects":"pending_engine_mapping"}],"appointmentRecordSchema":{"holderId":"string","officeId":"string|null","appointmentType":["正式任命","代理任命","自署職銜","無官職"],"appointingFactionId":"string|null","appointingCharacterId":"string|null","jurisdictionCityIds":"string[]","jurisdictionRegionIds":"string[]","commandUnitIds":"string[]","validFromTurn":"integer|null","validUntilTurn":"integer|null","status":["active","suspended","revoked","expired"]},"permissions":{"governCity":{"requires":["active_office_or_faction_ruler","city_control_or_delegation"],"neverGrantedBy":["identity_tier_alone"]},"commandArmy":{"requires":["active_command_assignment","assigned_units"],"neverGrantedBy":["office_title_alone"]},"collectTerritoryRevenue":{"requires":["controlled_city","tax_authority"],"neverGrantedBy":["tier_or_office_title_alone"]},"appointSubordinates":{"requires":["appointment_authority","valid_target_scope"],"neverGrantedBy":["identity_tier_alone"]},"raiseBannerB05":{"requires":["route_B","tier_at_least_4","B05_action_unlocked","engine_scenario_preconditions"],"apCost":"use_existing_command_rules_only","onSuccess":"route_change_to_A_pending_engine_mapping"}},"promotionFlow":["檢查當前 A–E 路線與階級","讀取既有軍功/資產/聲望等門檻，不新增未驗證數值","判定升階資格","B 路線透過主公評定或任命取得實職，不能自動獲封轄地","獨立檢查轄地、兵權、薪俸及任務指派","產生可追溯的狀態變更記錄"],"appointmentLifecycle":["nominate","review","appoint_or_acting","delegate_scope","evaluate","promote_transfer_dismiss_or_expire"],"evaluationRules":{"routeB":"主公評定視窗依既有時機強制觸發；任務需明確期限與獎懲","routeA":"自主政務評定，不套用 B 的主公召見","routesCDE":"各自社會地位進階，不自動轉為官職","endTurnEvents":"不額外扣除已耗盡的 AP"},"crossRouteTransitions":{"B_to_A":"僅在既有 B-05 或其他經確認的合法轉換條件達成後","C_to_A":"奪城後按既有規則強制轉 A","D_to_A":"依既有塢堡與資產條件判定","E_to_B":"招安後依既有規則轉 B"},"openQuestions":["軍功/資產/名望的各階確切門檻","薪俸週期與支付主體","主程式內評定、任命、城池所有權的真實欄位","不同劇本對官職可用性的限制","A 路線官銜是否為朝廷授官或自署"]}};
       // Existing legacy reputation thresholds, mapped provisionally to C only.
       const CAREER_C_THRESHOLDS=Object.freeze(OFFICIAL_RANKS.slice(0,5).map(r=>r.minRepute));
       function validCareer(g){return g.career===undefined||!!g.career&&typeof g.career==='object'&&g.career.route===g.role.id&&Number.isInteger(g.career.tier)&&g.career.tier>=1&&g.career.tier<=5;}
@@ -3138,10 +3211,12 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
       function issueOffice(g,issuer,id,cityId,until){const o=officeDefinition(id);if(!o||g.role.id!=='B'||!validCareer(g)||!issuer||issuer==='PLAYER'||g.liegeFaction!==issuer||careerTier(g).tier<o.minimumTierCandidate||!Number.isSafeInteger(until)||until<governanceTurn(g)|| (cityId!==null&&(!Object.hasOwn(g.cities,cityId)||g.cities[cityId].owner!==issuer))||(o.requiresTerritoryForTerritorialPowers&&cityId===null))return false;g.appointment={officeId:id,issuer,cityId,hero:heroKey(g.hero),issued:governanceTurn(g),until};return true;}
       function revokeOffice(g,issuer){if(!g.appointment||g.appointment.issuer!==issuer)return false;delete g.appointment;return true;}
       function careerTier(g){return CAREER_SOURCE.OFFICIAL_GOVERNANCE_V2.identityTiers[g.role.id][validCareer(g)&&g.career?g.career.tier-1:0];}
-      function careerEligibility(g){const tier=careerTier(g).tier;if(tier===5)return {ok:false,text:'已達最高階'};if(g.role.id==='B'){const need=[0,100,500,3000,18000][tier];return {ok:orderLiege(g)&&validMerit(g)&&(g.merit||0)>=need&&g.councilMonth===councilMonth(g),text:'軍功 '+(g.merit||0)+' / '+need+'；須完成本月評定（試行門檻）'};}if(g.role.id==='D'){const need=[0,3000,10000,30000,100000][tier];return {ok:Number.isSafeInteger(g.gold)&&g.gold>=need,text:'現有銀錢 '+g.gold+' / '+need+'（試行門檻，不計未售貨物）'};}if(g.role.id==='E'){const need=[0,300,1000,3000,8000][tier],wall=[0,30,50,70,90][tier];return {ok:!!g.banditBase&&g.banditBase.cityId===g.currentCityId&&g.troops>=need&&g.banditBase.defense>=wall,text:'寨眾 '+g.troops+' / '+need+'；寨防 '+(g.banditBase?.defense||0)+' / '+wall+'（試行門檻，須在寨內）'};}if(g.role.id==='A'){const n=Object.values(g.cities).filter(c=>c.owner==='PLAYER').length,need=[0,2,4,8,15][tier],army=[0,1000,3000,8000,15000][tier];return {ok:n>=need&&g.troops>=army,text:'直轄城池 '+n+' / '+need+'；兵力 '+g.troops+' / '+army+'（試行門檻）'};}if(g.role.id!=='C')return {ok:false,text:({A:'領地與兵力門檻',B:'軍功與主公評定',D:'資產門檻',E:'山寨規模門檻'})[g.role.id]+'尚待正式接線'};const need=CAREER_C_THRESHOLDS[tier];return {ok:g.repute>=need,text:'聲望 '+g.repute+' / '+need+'（沿用舊門檻試行）'};}
+      function banditOrganization(g){if(g.role.id!=='E')return null;const tier=careerTier(g).tier;if(tier>=3)return null;return g.banditOrganization||{name:'地方山寨',superior:'寨主（模擬人物）',merit:0};}
+function recordBanditDuty(g,id){if(g.role.id!=='E'||careerTier(g).tier>=3||!['career_e_watch','career_e_patrol'].includes(id))return;const o=banditOrganization(g);g.banditOrganization={...o,merit:Math.min(100000,(o.merit||0)+(id==='career_e_watch'?10:20))};}
+function careerEligibility(g){const tier=careerTier(g).tier;if(tier===5)return {ok:false,text:'已達最高階'};if(g.role.id==='B'){const need=[0,100,500,3000,18000][tier];return {ok:orderLiege(g)&&validMerit(g)&&(g.merit||0)>=need&&g.councilMonth===councilMonth(g),text:'軍功 '+(g.merit||0)+' / '+need+'；須完成本月評定（試行門檻）'};}if(g.role.id==='D'){const need=[0,3000,10000,30000,100000][tier];return {ok:Number.isSafeInteger(g.gold)&&g.gold>=need,text:'現有銀錢 '+g.gold+' / '+need+'（試行門檻，不計未售貨物）'};}if(g.role.id==='E'&&tier<3){const o=banditOrganization(g),need=tier===1?50:150;return {ok:o.merit>=need,text:'山寨功績 '+o.merit+' / '+need+'；由上級考核（試行）'};}if(g.role.id==='E'){const need=[0,300,1000,3000,8000][tier],wall=[0,30,50,70,90][tier];return {ok:!!g.banditBase&&g.banditBase.cityId===g.currentCityId&&g.troops>=need&&g.banditBase.defense>=wall,text:'寨眾 '+g.troops+' / '+need+'；寨防 '+(g.banditBase?.defense||0)+' / '+wall+'（試行門檻，須在寨內）'};}if(g.role.id==='A'){const n=Object.values(g.cities).filter(c=>c.owner==='PLAYER').length,need=[0,2,4,8,15][tier],army=[0,1000,3000,8000,15000][tier];return {ok:n>=need&&g.troops>=army,text:'直轄城池 '+n+' / '+need+'；兵力 '+g.troops+' / '+army+'（試行門檻）'};}if(g.role.id!=='C')return {ok:false,text:({A:'領地與兵力門檻',B:'軍功與主公評定',D:'資產門檻',E:'山寨規模門檻'})[g.role.id]+'尚待正式接線'};const need=CAREER_C_THRESHOLDS[tier];return {ok:g.repute>=need,text:'聲望 '+g.repute+' / '+need+'（沿用舊門檻試行）'};}
       const CAREER_AP=Object.freeze({A:[4,6,8,11,14],B:[4,6,8,11,14],C:[4,4,5,5,6],D:[4,6,9,12,15],E:[4,6,8,11,14]});
       function careerAp(g){return CAREER_AP[g.role.id][careerTier(g).tier-1];}
-      function promoteCareer(g){if(g!==game||independentBattle(g)||storyBusy()||pendingRecruit||g.mutinyPending||!careerEligibility(g).ok)return false;const tier=careerTier(g).tier+1;g.career={route:g.role.id,tier};g.maxAp=careerAp(g);g.logs.unshift('【身分晉升】'+careerTier(g).progressionLabel+'；未授予官職、兵權或轄地。');g.logs=g.logs.slice(0,500);return true;}
+      function promoteCareer(g){if(g!==game||independentBattle(g)||storyBusy()||pendingRecruit||g.mutinyPending||!careerEligibility(g).ok)return false;const tier=careerTier(g).tier+1;g.career={route:g.role.id,tier};g.maxAp=careerAp(g);if(g.role.id==='E'&&tier===3)delete g.banditOrganization;g.logs.unshift('【身分晉升】'+careerTier(g).progressionLabel+'；未授予官職、兵權或轄地。');g.logs=g.logs.slice(0,500);return true;}
       function getRankTitle(repute){return game?careerTier(game).progressionLabel:'未選身分';}
       function transitionReason(g,to){
         if(!g||g!==game||storyBusy()||pendingRecruit||g.mutinyPending||independentBattle(g))return '請先處理當前事件或戰役';
@@ -3158,7 +3233,7 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
         if(transitionReason(g,to))return false;
         const before=cloneObj(g),from=g.role.id;
         try{
-          if(from==='E'&&to==='B'){delete g.banditBase;g.logs.unshift('【招安】交出山寨據點，寨眾保留為所部；未取得城池或官職。');}
+          if(from==='E'&&to==='B'){delete g.banditBase;delete g.banditOrganization;g.logs.unshift('【招安】交出山寨據點，寨眾保留為所部；未取得城池或官職。');}
           const oldOrder=g.mainOrder;if(oldOrder)g.logs.unshift('【身分轉換】原主命結束：'+oldOrder.id+'（不發獎勵）');
           for(const c of Object.values(g.cities))if(c.governanceGrant?.hero===heroKey(g.hero))delete c.governanceGrant;
           for(const k of ['appointment','mainOrder','councilMonth','liegeFaction','merit','liegeTrust'])delete g[k];
@@ -3195,7 +3270,7 @@ function openPersonGeo(){openInfo('人物地緣名冊（逐旬更新）',body=>{
  function captiveBlocked(g,h){return campaignOfficerUnavailable(g,heroKey(h))||(g.captives||[]).some(c=>c.id===heroKey(h));}
  function injured(g,h){return (g.wounds||[]).some(c=>c.id===heroKey(h)&&c.until>governanceTurn(g));}
  function validWarPeople(g){const c=g.captives||[],w=g.wounds||[],owned=[g.hero,...g.roster].map(heroKey);return Array.isArray(c)&&Array.isArray(w)&&new Set(c.map(x=>x.id)).size===c.length&&new Set(w.map(x=>x.id)).size===w.length&&c.every(x=>x&&heroIdentity.has(x.id)&&!owned.includes(x.id)&&Object.hasOwn(g.cities,x.city))&&w.every(x=>x&&(owned.includes(x.id)||heroIdentity.has(x.id))&&Number.isSafeInteger(x.until)&&x.until>=0);}
- function disposeCaptive(g,id,join){if(g!==game||storyBusy()||pendingRecruit||g.mutinyPending)return false;const c=(g.captives||[]).find(x=>x.id===id),h=heroIdentity.get(id);if(!c||!h||join&&(!availableHero(h,g.year)||[g.hero,...g.roster].some(x=>heroKey(x)===id)))return false;const before=cloneObj(g);try{g.captives=g.captives.filter(x=>x.id!==id);const outcome=g.campaigns?.officerOutcomes?.[id];if(outcome?.kind==='captured'){delete g.campaigns.officerOutcomes[id];if(g.personGeo?.people?.[id]){const person=g.personGeo.people[id];person.status=join?'serving':'free';person.faction=join?'PLAYER':null;person.city=join?g.currentCityId:c.city;}}if(join)g.roster.push({...h,bond:50});g.logs.unshift('【俘虜】'+h.name+(join?'歸順':'獲釋'));g.logs=g.logs.slice(0,500);if(!validateSave({game:g}))throw Error();return true;}catch(e){Object.keys(g).forEach(k=>delete g[k]);Object.assign(g,before);return false;}}
+ function disposeCaptive(g,id,join){if(g!==game||storyBusy()||pendingRecruit||g.mutinyPending)return false;const c=(g.captives||[]).find(x=>x.id===id),h=heroIdentity.get(id);if(!c||!h||join&&(!availableHero(h,g.year)||[g.hero,...g.roster].some(x=>heroKey(x)===id)))return false;const before=cloneObj(g);try{g.captives=g.captives.filter(x=>x.id!==id);const outcome=g.campaigns?.officerOutcomes?.[id];if(outcome?.kind==='captured'){delete g.campaigns.officerOutcomes[id];if(g.personGeo?.people?.[id]){const person=g.personGeo.people[id];person.status=join?'serving':'free';person.faction=join?'PLAYER':null;person.city=join?g.currentCityId:c.city;}}if(join)g.roster.push({...h,bond:50});else changeDynamicRelation(g,g.hero.name,h.name,10);g.logs.unshift('【俘虜】'+h.name+(join?'歸順':'獲釋'));g.logs=g.logs.slice(0,500);if(!validateSave({game:g}))throw Error();return true;}catch(e){Object.keys(g).forEach(k=>delete g[k]);Object.assign(g,before);return false;}}
  function captivePanel(body){const box=document.createElement('div');body.append(box);function draw(){box.replaceChildren();for(const r of game.campaigns?.soldierCaptives||[]){if(r.owner!=='PLAYER')continue;const p=document.createElement('p');p.textContent=r.former+' 士兵俘虜 '+r.n+' 人';const b=document.createElement('button');b.textContent='釋放士兵';b.onclick=()=>{if(!independentBattle(game)&&!storyBusy()&&!pendingRecruit&&!game.mutinyPending&&releaseSoldierCaptives(game,r)){renderGame();draw();}};box.append(p,b);for(const [label,fn] of [['招降士兵',recruitSoldierCaptives],['交換士兵',exchangeSoldierCaptives]]){const k=document.createElement('button');k.textContent=label;k.onclick=()=>{if(!independentBattle(game)&&!storyBusy()&&!pendingRecruit&&!game.mutinyPending&&fn(game,r)){renderGame();draw();}};box.append(k);}}for(const c of game.captives||[]){const h=heroIdentity.get(c.id),p=document.createElement('p');p.textContent=h.name+'（被俘）';box.append(p);for(const join of [false,true]){const b=document.createElement('button');b.textContent=join?'勸降（試行）':'釋放';b.className='border rounded p-2';b.onclick=()=>{if(!independentBattle(game)&&!storyBusy()&&!pendingRecruit&&!game.mutinyPending&&disposeCaptive(game,c.id,join)){renderGame();draw();}};box.append(b);}}}draw();}
  function validBattleReward(g){return g.battleWins===undefined||Number.isSafeInteger(g.battleWins)&&g.battleWins>=0;}
  function abandonEmptyOrigin(g,c,owner){
@@ -3348,12 +3423,13 @@ function tickPlayerCampaign(g,x,action='advance'){const c=g.cities[x.from],d=g.c
  const origin=g.cities[g.currentCityId],d=g.cities[target];if(!origin||!d||!roadOpen(g,origin.id,target)||d.garrison!==0||!Number.isSafeInteger(n)||n<1||n>g.troops)return false;
  const before=cloneObj(g);try{const former=d.owner,owner=g.role.id==='B'?g.liegeFaction:'PLAYER';g.ap--;g.troops-=n;d.owner=owner;if(g.role.id==='B'){g.mainOrder.progress=1;g.mainOrder.status='ready';}d.garrison=n;d.defender='';d.security=Math.max(0,d.security-10);d.prosperity=Math.max(0,d.prosperity-5);delete d.governanceGrant;if(d.governance)d.governance.active_project=null;if(g.npcEconomy?.cities)delete g.npcEconomy.cities[target];g.logs.unshift('【佔領】'+d.name+'：'+former+' → '+owner+'；配置駐軍 '+n+'；消耗1 AP。'+(!Object.values(g.cities).some(c=>c.owner===former)?' 原勢力已無城池。':''));g.logs=g.logs.slice(0,500);if(!validateSave({game:g}))throw Error();return true;}catch(e){Object.keys(g).forEach(k=>delete g[k]);Object.assign(g,before);return false;}}
  function breachEmpty(g,target){const c=g?.cities[g.currentCityId],d=g?.cities[target];if(!militaryPermission(g,target,'breach')||g.troops<1||d.garrison!==0||d.defense<=0)return false;const cost=Math.ceil(g.troops/10);if(g.food<cost)return false;g.ap--;g.food-=cost;d.defense=Math.max(0,d.defense-10);g.logs.unshift('【無守軍攻城】'+d.name+' 城防降至 '+d.defense+'；軍糧 -'+cost);g.logs=g.logs.slice(0,500);return true;}
- function openExpedition(){openInfo('出征編制',body=>{
+ function openExpedition(chosen){if(!chosen){openWorldMap('expedition');return;}openInfo('出征編制',body=>{
  const g=game,city=g.cities[g.currentCityId], people=[g.hero,...g.roster], key=h=>String(h.heroId||h.id||h.name);
  const msg=document.createElement('p');msg.textContent='君主或持有效指定攻城主命的四階以上臣屬可出征；臣屬佔領歸主公。檢查編制不扣資源；確認出征後預扣軍糧與軍費，逐旬行軍交戰；守軍歸零後自動佔領。';body.append(msg);captivePanel(body);
  const field=(label,el)=>{const l=document.createElement('label');l.style.display='block';l.textContent=label+' ';l.append(el);body.append(l);return el;};
  const select=(label,opts)=>{const el=document.createElement('select');for(const [v,t] of opts){const o=document.createElement('option');o.value=v;o.textContent=t;el.append(o);}return field(label,el);};
  const target=select('目標城池',city.neighbors.filter(id=>militaryPermission(g,id,'field')).map(id=>[id,g.cities[id].name]));
+ target.value=chosen;
  const mode=select('交戰方式',[['field','野戰'],['siege','攻城']]);
  const leader=select('主將',people.map(h=>[key(h),h.name])), deputy=select('副將',[['','不配置'],...people.map(h=>[key(h),h.name])]);
  const optional=[['','不配置'],...people.map(h=>[key(h),h.name])], strategist=select('參軍',optional),vanguard=select('先鋒',optional),logistics=select('督糧官',optional);
@@ -3364,7 +3440,7 @@ function tickPlayerCampaign(g,x,action='advance'){const c=g.cities[x.from],d=g.c
  });}
  function openCareer(){openInfo('身分階級與官職',body=>{
         const route=game.role.id, rows=CAREER_SOURCE.OFFICIAL_GOVERNANCE_V2.identityTiers[route], ranks=CAREER_SOURCE.OFFICIAL_RANKS[route], tier=careerTier(game).tier, eligibility=careerEligibility(game);
-        const note=document.createElement('p');note.textContent='升階資格：'+eligibility.text+'。正式官職、薪俸、兵權及轄地獨立授權。';body.append(note);const appointment=document.createElement('p');const a=activeOffice(game);appointment.textContent=a?'正式任命：'+officeDefinition(a.officeId).title+'；轄地：'+(a.cityId?game.cities[a.cityId].name:'無'):'正式任命：無（等待主公評定）';body.append(appointment);if(route==='B')orderPanel(game,body);identityPanel(game,body);
+        const note=document.createElement('p');note.textContent='升階資格：'+eligibility.text+'。正式官職、薪俸、兵權及轄地獨立授權。';body.append(note);const appointment=document.createElement('p');const a=activeOffice(game);appointment.textContent=a?'正式任命：'+officeDefinition(a.officeId).title+'；轄地：'+(a.cityId?game.cities[a.cityId].name:'無'):'正式任命：無（等待主公評定）';body.append(appointment);if(route==='B')orderPanel(game,body);if(route==='E'){const o=banditOrganization(game),p=document.createElement('p');p.textContent=o?o.name+'｜上級：'+o.superior+'｜功績 '+o.merit:'可自立山寨；須另行執行建立山寨指令。';body.append(p);}identityPanel(game,body);
         const btn=document.createElement('button');btn.id='career-promote';btn.className='border rounded-xl p-2';btn.textContent='確認晉升（0 AP）';btn.disabled=!eligibility.ok;btn.addEventListener('click',()=>{if(promoteCareer(game)){renderGame();openCareer();}});body.append(btn);
         rows.forEach((r,i)=>{const box=document.createElement('div');box.className='p-3 border rounded-xl';const h=document.createElement('strong');h.textContent='第'+r.tier+'階 · '+r.progressionLabel+(r.tier===tier?'（目前）':'');const t=document.createElement('p');t.textContent='原始候選稱號：'+ranks[i].title;const v=document.createElement('p');v.textContent='候選權限：'+ranks[i].power+'（官職另行授權）';const cmds=document.createElement('p');cmds.textContent='AP上限 '+CAREER_AP[route][i]+'｜本階解鎖：'+(GAME_COMMANDS.filter(c=>roleHasCommand(game,c.id)&&(LIFE_JOBS[c.id]?.tier||TIER_COMMAND_MIN[route]?.[c.id]||1)===i+1).map(c=>c.name).join('、')||'無新增指令');box.append(h,t,v,cmds);body.append(box);});
       });}
@@ -3389,9 +3465,13 @@ function tickPlayerCampaign(g,x,action='advance'){const c=g.cities[x.from],d=g.c
       // -------------------------------------------------------------------
       // L. 主遊戲渲染 renderGame()
       // -------------------------------------------------------------------
+      function installCompactPanels(){if(document.getElementById('compact-panel-links'))return;const root=document.getElementById('main-scroll-area'),nav=document.createElement('div');nav.id='compact-panel-links';nav.className='grid grid-cols-2 sm:grid-cols-5 gap-2';root.prepend(nav);for(const [id,label] of [['scenario-story-card','劇本章節'],['development-panel-card','城池內政'],['status-panel-card','人物屬性'],['war-arena-card','軍事態勢'],['dynamic-events-box','行伍紀事']]){const panel=document.getElementById(id);if(!panel)continue;const anchor=document.createComment(id);panel.before(anchor);panel.classList.add('hidden');const b=document.createElement('button');b.className='btn-secondary-ink p-2';b.textContent=label;b.onclick=()=>{openInfo(label,body=>{panel.classList.remove('hidden');body.append(panel);});};nav.append(b);panel._compactRestore=()=>{panel.classList.add('hidden');anchor.after(panel);};}}
+      function restoreCompactPanels(){for(const id of ['scenario-story-card','development-panel-card','status-panel-card','war-arena-card','dynamic-events-box']){const p=document.getElementById(id);if(p?._compactRestore)p._compactRestore();}}
       function renderGame() {
         queueMicrotask(()=>{if(game)showIndependentBattle();});
         if (!game) return;
+        game.pendingTalents=pendingTalentList(game);syncDiscovery(game);installCompactPanels();
+        if(!document.getElementById('pending-talent-entry')){const b=document.createElement('button');b.id='pending-talent-entry';b.className='btn-primary-ink w-full py-2';b.textContent='待登庸名冊';b.onclick=openPendingTalents;document.getElementById('mini-status-bar').after(b);}
         if (game.logs.length > 500) game.logs.length = 500;
         const city = game.cities[game.currentCityId] || Object.values(game.cities)[0];
         const timeLbl = getTenDayLabel(game);
@@ -3459,11 +3539,11 @@ function tickPlayerCampaign(g,x,action='advance'){const c=g.cities[x.from],d=g.c
         // 人物屬性與路線特權卡 (#status-panel-card)
         document.getElementById('status-rank-badge').textContent = `${game.hero.name}（${game.hero.courtesy}）· ${rankTitle}`;
         document.getElementById('status-five-stats').innerHTML = [
-          { k: '武勇', v: game.hero.war },
-          { k: '智計', v: game.hero.int },
-          { k: '統率', v: game.hero.cmd },
-          { k: '政治', v: game.hero.pol },
-          { k: '德望', v: game.hero.cha }, { k: '野心', v: game.hero.ambition }
+          { k: '武勇', v: effectiveHeroStat(game,'war') },
+          { k: '智計', v: effectiveHeroStat(game,'int') },
+          { k: '統率', v: effectiveHeroStat(game,'cmd') },
+          { k: '政治', v: effectiveHeroStat(game,'pol') },
+          { k: '德望', v: effectiveHeroStat(game,'cha') }, { k: '野心', v: game.hero.ambition }
         ].map(function (s) {
           return `
             <div class="bg-stone-50 border border-stone-200 rounded-xl p-1.5">
@@ -3476,7 +3556,7 @@ function tickPlayerCampaign(g,x,action='advance'){const c=g.cities[x.from],d=g.c
           `${V10_ROUTE_PERKS[game.role.id] || ''}｜天命：${escapeHtml(game.destiny)}`;
 
         // 軍陣與沙場態勢卡 (#war-arena-card)
-        const combatPower = Math.round(game.troops * 0.1 + (game.hero.war * 14 + game.hero.cmd * 16));
+        const combatPower = Math.round(game.troops * 0.1 + (effectiveHeroStat(game,'war') * 14 + effectiveHeroStat(game,'cmd') * 16));
         document.getElementById('war-arena-content').innerHTML = `
           <div class="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
             <div class="text-[10px] text-stone-500">主帥軍陣</div>
@@ -3509,7 +3589,7 @@ function tickPlayerCampaign(g,x,action='advance'){const c=g.cities[x.from],d=g.c
         });
 
         const filteredCmds = GAME_COMMANDS.filter(function (c) {
-          return roleHasCommand(game,c.id);
+          return roleHasCommand(game,c.id) && (activeCmdCategory === "all" || c.category === activeCmdCategory);
         });
         document.getElementById('cmd-count-badge').textContent = `${filteredCmds.length} 項指令`;
         document.getElementById('full-command-list').innerHTML = filteredCmds.map(function (cmd) {
@@ -3557,8 +3637,10 @@ function tickPlayerCampaign(g,x,action='advance'){const c=g.cities[x.from],d=g.c
 
       function openInfo(title, renderBodyFn) {
         if(storyBusy())return;
+        document.getElementById('info-modal').classList.remove('world-map-full');
         document.getElementById('info-modal-title').textContent = title;
         const body = document.getElementById('info-modal-body');
+        restoreCompactPanels();
         body.innerHTML = '';
         renderBodyFn(body);
         document.getElementById('info-modal').classList.remove('hidden');
@@ -3587,6 +3669,7 @@ function tickPlayerCampaign(g,x,action='advance'){const c=g.cities[x.from],d=g.c
         if (cmd.foodCost) game.food -= cmd.foodCost;
 
         const out = cmd.exec(game);
+        recordBanditDuty(game,cmdId);
         advanceOrder(game,cmdId,before);
         const tLbl = getTenDayLabel(game);
         game.logs.unshift(`【${tLbl.short}】${out.title}：${out.desc}`);
@@ -3607,13 +3690,14 @@ const ORDER_SOURCE = {"schema_version":"0.1-draft","source":"主命新增設計�
       function validOrder(g){const a=g.mainOrder;if(a===undefined||a===null)return true;const o=orderDef(a.id);return !!o&&(a.id!=='order_daily_020'||typeof a.targetCity==='string'&&Object.hasOwn(g.cities,a.targetCity))&&Object.hasOwn(ORDER_BINDINGS,a.id)&&typeof a.issuer==='string'&&Number.isSafeInteger(a.start)&&a.start>=0&&a.start<=governanceTurn(g)&&a.deadline===a.start+o.deadline_xun&&Number.isSafeInteger(a.progress)&&a.progress>=0&&a.progress<=o.objective.target&&['active','ready','expired','reported','cancelled'].includes(a.status)&&(!['ready','reported'].includes(a.status)||a.progress===o.objective.target);}
       function settleOrder(g){const a=g.mainOrder;if(!a||!['active','ready'].includes(a.status))return;if(!orderLiege(g)||a.issuer!==g.liegeFaction){a.status='cancelled';return;}if(governanceTurn(g)>a.deadline){a.status='expired';applyOrderOutcome(g,orderDef(a.id).on_failure);}}
       function orderTarget(g){const c=g.cities[g.currentCityId];return c?.owner===g.liegeFaction?c.neighbors.find(id=>g.cities[id]&&g.cities[id].owner!==g.liegeFaction&&g.cities[id].owner!=='PLAYER'&&roadOpen(g,c.id,id)):undefined;}
-      function availableOrder(g){if(!orderLiege(g)||!validOrder(g))return null;const a=g.mainOrder;if(a&&(['active','ready'].includes(a.status)||Math.floor(governanceTurn(g)/9)===Math.floor(a.start/9)))return null;return [...ORDER_SOURCE.orders].sort((a,b)=>Number(b.id==='order_daily_020')-Number(a.id==='order_daily_020')).find(o=>(o.id!=='order_daily_020'||orderTarget(g))&&Object.hasOwn(ORDER_BINDINGS,o.id)&&o.eligibility.min_rank_tier<=careerTier(g).tier&&(!a||a.id!==o.id||governanceTurn(g)>=a.deadline+o.repeat_policy.cooldown_xun))||null;}
+      function orderFeasible(g,o){const c=g.cities[g.currentCityId],id=ORDER_BINDINGS[o.id];if(!c||c.owner!==g.liegeFaction)return false;if(id==='occupy_order_city')return careerTier(g).tier>=4&&g.troops>0&&!!orderTarget(g);if(id==='cmd_retainer_inspect')return roleHasCommand(g,id)&&!tierCommandReason(g,id);return !!GAME_COMMANDS.find(x=>x.id===id)&&commandAllowed(g,id);}
+      function availableOrder(g){if(!orderLiege(g)||!validOrder(g))return null;const a=g.mainOrder;if(a&&(['active','ready'].includes(a.status)||Math.floor(governanceTurn(g)/9)===Math.floor(a.start/9)))return null;return [...ORDER_SOURCE.orders].sort((a,b)=>Number(b.id==='order_daily_020')-Number(a.id==='order_daily_020')).find(o=>Object.hasOwn(ORDER_BINDINGS,o.id)&&orderFeasible(g,o)&&o.eligibility.min_rank_tier<=careerTier(g).tier&&(!a||a.id!==o.id||governanceTurn(g)>=a.deadline+o.repeat_policy.cooldown_xun))||null;}
       function acceptOrder(g,id){if(g!==game||activeStory?.kind!=='council')return false;const o=availableOrder(g);if(!o||o.id!==id)return false;const t=governanceTurn(g);g.mainOrder={id,issuer:g.liegeFaction,start:t,deadline:t+o.deadline_xun,progress:0,status:'active',...(id==='order_daily_020'?{targetCity:orderTarget(g)}:{})};return true;}
       function advanceOrder(g,cmd,before){settleOrder(g);const a=g.mainOrder;if(!a||a.status!=='active'||ORDER_BINDINGS[a.id]!==cmd||g.cities[g.currentCityId].owner!==a.issuer)return;const o=orderDef(a.id);if(cmd==='cmd_drill_army'&&g.troops<=0)return;const n=cmd==='cmd_recruit_troops'?Math.max(0,g.troops-before.troops):1;a.progress=Math.min(o.objective.target,a.progress+n);if(a.progress===o.objective.target)a.status='ready';}
       function validMerit(g){return (g.merit===undefined||Number.isSafeInteger(g.merit)&&g.merit>=0)&&(g.liegeTrust===undefined||Number.isInteger(g.liegeTrust)&&g.liegeTrust>=-100&&g.liegeTrust<=100);}
       function applyOrderOutcome(g,o){g.merit=Math.max(0,Math.min(Number.MAX_SAFE_INTEGER,(g.merit||0)+o.merit));g.liegeTrust=Math.max(-100,Math.min(100,(g.liegeTrust||0)+o.liege_trust));g.logs.unshift('【主命獎懲】軍功 '+o.merit+'；主公信任 '+o.liege_trust);}
       function reportOrder(g){settleOrder(g);if(g.mainOrder?.status!=='ready')return false;g.mainOrder.status='reported';applyOrderOutcome(g,orderDef(g.mainOrder.id).rewards);return true;}
-      function orderPanel(g,body,offer=false){settleOrder(g);const a=g.mainOrder;const p=document.createElement('p');p.textContent=a?orderDef(a.id).title+(a.targetCity?'（'+g.cities[a.targetCity].name+'）':'')+'｜進度 '+a.progress+'/'+orderDef(a.id).objective.target+'｜剩餘 '+Math.max(0,a.deadline-governanceTurn(g))+' 旬｜'+({active:'執行中',ready:'可呈報',reported:'已呈報',expired:'逾期',cancelled:'取消'})[a.status]:'目前無主命';body.append(p);const m=document.createElement('p');m.textContent='軍功 '+(g.merit||0)+'｜主公信任 '+(g.liegeTrust||0);body.append(m);const button=(label,fn)=>{const b=document.createElement('button');b.className='btn-secondary-ink p-3';b.textContent=label;b.onclick=()=>{if(game!==g)return;if(!fn())return;b.disabled=true;m.textContent='軍功 '+(g.merit||0)+'｜主公信任 '+(g.liegeTrust||0);p.textContent='主命：'+(g.mainOrder?orderDef(g.mainOrder.id).title+'／'+g.mainOrder.status:'無');if(!storyBusy())renderGame();};body.append(b);};if(a?.status==='ready')button('呈報主命（0 AP）',()=>reportOrder(g));const o=offer?availableOrder(g):null;if(o){const q=document.createElement('p');q.textContent=o.title+(o.id==='order_daily_020'?'（'+g.cities[orderTarget(g)].name+'）':'')+'：'+o.objective.description+' '+o.objective.target+'；期限 '+o.deadline_xun+' 旬。';body.append(q);button('接受主命（0 AP）',()=>acceptOrder(g,o.id));}}
+      function orderPanel(g,body,offer=false){settleOrder(g);const a=g.mainOrder;const p=document.createElement('p');p.textContent=a?orderDef(a.id).title+(a.targetCity?'（'+g.cities[a.targetCity].name+'）':'')+'｜進度 '+a.progress+'/'+orderDef(a.id).objective.target+'｜剩餘 '+Math.max(0,a.deadline-governanceTurn(g))+' 旬｜'+({active:'執行中',ready:'可呈報',reported:'已呈報',expired:'逾期',cancelled:'取消'})[a.status]:'目前無主命';body.append(p);const m=document.createElement('p');m.textContent='軍功 '+(g.merit||0)+'｜主公信任 '+(g.liegeTrust||0);body.append(m);const button=(label,fn)=>{const b=document.createElement('button');b.className='btn-secondary-ink p-3';b.textContent=label;b.onclick=()=>{if(game!==g)return;if(!fn())return;b.disabled=true;m.textContent='軍功 '+(g.merit||0)+'｜主公信任 '+(g.liegeTrust||0);p.textContent='主命：'+(g.mainOrder?orderDef(g.mainOrder.id).title+'／'+g.mainOrder.status:'無');if(!storyBusy())renderGame();};body.append(b);};if(a?.status==='ready')button('呈報主命（0 AP）',()=>reportOrder(g));if(a?.status==='active'&&!offer){const id=ORDER_BINDINGS[a.id],cmd=GAME_COMMANDS.find(c=>c.id===id),b=document.createElement('button');b.className='btn-primary-ink p-3';const reason=id==='occupy_order_city'?(!a.targetCity||!roadOpen(g,g.currentCityId,a.targetCity)?'目標道路不可達':''):commandBlockReason(g,id);b.textContent='執行主命：'+(cmd?.name||'出征')+(reason?'｜'+reason:'');b.disabled=!!reason;b.onclick=()=>{if(game!==g||storyBusy()||g.mainOrder!==a||a.status!=='active')return;document.getElementById('info-modal').classList.add('hidden');if(id==='occupy_order_city')openExpedition(a.targetCity);else executeGameCommand(id);};body.append(b);}const o=offer?availableOrder(g):null;if(o){const q=document.createElement('p');q.textContent=o.title+(o.id==='order_daily_020'?'（'+g.cities[orderTarget(g)].name+'）':'')+'：'+o.objective.description+' '+o.objective.target+'；期限 '+o.deadline_xun+' 旬。';body.append(q);button('接受主命（0 AP）',()=>acceptOrder(g,o.id));}}
       function councilMonth(g){return g.year*12+g.month-1;}
       function validCouncil(g){return g.councilMonth===undefined||Number.isSafeInteger(g.councilMonth)&&g.councilMonth>=0&&g.councilMonth<=councilMonth(g);}
       function offerCouncil(g){if(g.role.id!=='B'||typeof g.liegeFaction!=='string'||!g.liegeFaction||g.liegeFaction==='PLAYER'||!Object.values(g.cities).some(c=>c.owner===g.liegeFaction)||g.tenDay!==1||!validCouncil(g)||g.councilMonth===councilMonth(g))return false;
@@ -3682,7 +3766,7 @@ function drainStory(){
         settleNpcMilitary(game);
         settleFactionHistory(game);
         settleBanditRaid(game);
-        settlePersonGeo(game);
+        settlePersonGeo(game); settleOfficerContinuity(game);
         settleExileRecovery(game);
         settleHistory(game);
         game.tenDay += 1;
@@ -3885,8 +3969,8 @@ function recoverCityPopulation(g,c,v){const t=governanceTurn(g);if(c.lastWarTurn
 function settleCityBase(g){for(const c of Object.values(g.cities)){const v=syncCityBase(c);recoverCityPopulation(g,c,v);if(c.governance&&cityWarActive(g,c))continue;if(c.governance&&CityConstruction.tick(c.governance,governanceTurn(g))){for(const k of ['agriculture','commerce','industry','wall','security','public_support'])v[k]=cityStat(c.governance[k]);c.security=v.security;c.defense=v.wall;c.prosperity=v.lastProsperity=cityProsperity(v);g.logs.unshift('【治理】'+c.name+'工程完工。');}}}
 function settleGovernance(g){settleCityBase(g);}
       // v10.3.5: income and local development share existing city data.
-      function settlementScale(c){const n=npcCapacity(c);return n<=3000?{name:'小型城池',rate:.7}:n<=6000?{name:'中型城池',rate:1}:n<=12000?{name:'大型城池',rate:1.35}:n<=20000?{name:'巨型城池',rate:1.65}:{name:'都城',rate:2};}
-      function farmYield(g,c){const v=syncCityBase(c),factor=settlementScale(c).rate*cityRecoveryRate(g,c)*(.5+v.security/200);return {gold:Math.floor((60+g.hero.pol*1.2+v.commerce)*factor),food:Math.floor((100+g.hero.pol*2+v.agriculture*2)*factor)};}
+      function settlementScale(c){const n=npcCapacity(c);return n<=6000?{name:'小型城池',rate:n<=3000?.7:1}:n<=12000?{name:'大型城池',rate:1.35}:n<=20000?{name:'巨型城池',rate:1.65}:{name:'都城',rate:2};}
+      function farmYield(g,c){const v=syncCityBase(c),factor=settlementScale(c).rate*cityRecoveryRate(g,c)*(.5+v.security/200);return {gold:Math.floor((60+effectiveHeroStat(g,'pol')*1.2+v.commerce)*factor),food:Math.floor((100+effectiveHeroStat(g,'pol')*2+v.agriculture*2)*factor)};}
       function economyIncome(g,c){
         if(g.role.id==='C')return {gold:0,food:0};
         const v=syncCityBase(c), rate=cityRecoveryRate(g,c), security=.5+v.security/200;
@@ -3971,6 +4055,10 @@ function settleGovernance(g){settleCityBase(g);}
         const g = p && p.game;
         if (p && p.savedAt !== undefined && !str(p.savedAt)) return false;
         if (!obj(g) || !obj(g.hero) || !obj(g.role) || !obj(g.cities) || !obj(g.doctrine)) return false;
+        if(g.banditOrganization!==undefined&&(!obj(g.banditOrganization)||g.role.id!=='E'||!str(g.banditOrganization.name)||!str(g.banditOrganization.superior)||!Number.isSafeInteger(g.banditOrganization.merit)||g.banditOrganization.merit<0||g.banditOrganization.merit>100000))return false;
+        if(g.dynamicRelations!==undefined&&(!obj(g.dynamicRelations)||Object.keys(g.dynamicRelations).length>10000||!Object.entries(g.dynamicRelations).every(([k,v])=>{const a=JSON.parse(k);return Array.isArray(a)&&a.length===2&&a.every(str)&&Number.isInteger(v)&&Math.abs(v)<=30;})))return false;
+        for(const key of ['discoveredHeroes','discoveredTreasures'])if(g[key]!==undefined&&(!Array.isArray(g[key])||g[key].length>10000||!g[key].every(x=>typeof x==='string')||new Set(g[key]).size!==g[key].length))return false;
+        if(g.pendingTalents!==undefined&&(!Array.isArray(g.pendingTalents)||g.pendingTalents.length>1000||!g.pendingTalents.every(x=>x&&typeof x.id==='string'&&heroIdentity.has(x.id)&&Number.isSafeInteger(x.expires)&&x.expires<=governanceTurn(g)+5&&Number.isFinite(x.bond)&&x.bond>=0&&x.bond<=100)||new Set(g.pendingTalents.map(x=>x.id)).size!==g.pendingTalents.length))return false;
         if (!['A','B','C','D','E'].includes(g.role.id) || !str(g.role.code) || !str(g.hero.name)) return false;
         if(g.role.id==='C'&&(g.troops!==0||!Array.isArray(g.roster)||g.roster.length||Object.values(g.cities).some(c=>c?.owner==='PLAYER')||(g.captives||[]).length))return false;
         if(g.companions!==undefined&&(!Array.isArray(g.companions)||g.companions.length>2||g.role.id!=='C'&&g.companions.length||g.companions.some(h=>!h||!heroIdentity.has(heroKey(h)))||new Set([heroKey(g.hero),...g.companions.map(heroKey)]).size!==g.companions.length+1))return false;
@@ -4069,8 +4157,8 @@ function settleGovernance(g){settleCityBase(g);}
       function relationshipClamp(n){return Math.max(0,Math.min(100,n));}
       function relationshipLabel(n){return n>=90?'深厚':n>=70?'信賴':n>=40?'普通':n>=20?'疏遠':'敵意';}
       function relationshipValid(g){return relationshipPeople(g).every(h=>['loyalty','grievance'].every(k=>h[k]===undefined||Number.isInteger(h[k])&&h[k]>=0&&h[k]<=100)&&(h.relationLast===undefined||Number.isSafeInteger(h.relationLast)&&h.relationLast>=0&&h.relationLast<=governanceTurn(g)));}
-      function relationshipReason(g,h,key){const a=REL_ACTIONS[key];if(!a||!relationshipPeople(g).includes(h))return '非同行或麾下人物';if(independentBattle(g)||storyBusy()||pendingRecruit||g.mutinyPending)return '須先結束當前事件或戰役';if(g.ap<1||g.gold<a.gold)return '行動力或銀錢不足';if(h.relationLast===governanceTurn(g))return '本旬已與此人互動';if(campaignOfficerIds(g).has(heroKey(h)))return '人物正在出征';return '';}
-      function relationshipAction(g,h,key){if(g!==game||relationshipReason(g,h,key))return false;const a=REL_ACTIONS[key],r=relationshipValue(h);g.ap--;g.gold-=a.gold;h.bond=relationshipClamp(r.bond+a.bond);if(g.role.id!=='C')h.loyalty=relationshipClamp(r.loyalty+a.loyalty);h.grievance=relationshipClamp(r.grievance+a.grievance);h.relationLast=governanceTurn(g);g.logs.unshift('【人際】'+h.name+'：'+a.label+'，好感 '+h.bond+'，逆鱗 '+h.grievance);renderGame();return true;}
+      function relationshipReason(g,h,key){const a=REL_ACTIONS[key];if(!a||!relationshipPeople(g).includes(h))return '非同行或麾下人物';if(independentBattle(g)||storyBusy()||pendingRecruit||g.mutinyPending)return '須先結束當前事件或戰役';if(g.ap<1||g.gold<a.gold)return '行動力或銀錢不足';if(campaignOfficerIds(g).has(heroKey(h)))return '人物正在出征';return '';}
+      function relationshipAction(g,h,key){if(g!==game||relationshipReason(g,h,key))return false;const a=REL_ACTIONS[key],r=relationshipValue(h);g.ap--;g.gold-=a.gold;h.bond=relationshipClamp(r.bond+a.bond);if(g.role.id!=='C')h.loyalty=relationshipClamp(r.loyalty+a.loyalty);h.grievance=relationshipClamp(r.grievance+a.grievance);h.relationLast=governanceTurn(g);if(key==='gift'||key==='feast'){for(const ally of relationshipPeople(g)){if(ally!==h&&historicalPair(g,h.name,ally.name)>=15&&g.role.id!=='C')ally.loyalty=relationshipClamp(relationshipValue(ally).loyalty+1);}}g.logs.unshift('【人際】'+h.name+'：'+a.label+'，好感 '+h.bond+'，逆鱗 '+h.grievance);renderGame();return true;}
       function settleRelationships(g,shortage){for(const h of relationshipPeople(g)){if(g.role.id==='C')continue;const r=relationshipValue(h);h.loyalty=relationshipClamp(r.loyalty+(shortage?-5:r.bond>=85?1:0));const special=individualGrievance(g,h,shortage);h.grievance=relationshipClamp(r.grievance+(shortage?10:0)+special.extra);if(special.extra)g.logs.unshift(`【專屬逆鱗】${h.name}：${special.reason} +${special.extra}`);if(h.grievance>=100&&r.grievance<100){h.loyalty=relationshipClamp(h.loyalty-15);g.logs.unshift('【逆鱗警告】'+h.name+'不滿達上限，忠誠下降15。');}}}
       function relationshipPanel(h,body){if(!game||!relationshipPeople(game).includes(h))return;const g=game,box=document.createElement('section');box.className='border rounded-xl p-3';body.append(box);function draw(){box.replaceChildren();const r=relationshipValue(h),p=document.createElement('p');p.textContent='好感 '+r.bond+'（'+relationshipLabel(r.bond)+'）'+(g.role.id==='C'?'':'｜忠誠 '+r.loyalty)+'｜逆鱗 '+r.grievance;box.append(p);for(const [key,a] of Object.entries(REL_ACTIONS)){const b=document.createElement('button'),reason=relationshipReason(g,h,key);b.className='btn-secondary-ink p-2';b.textContent=a.label+'（1 AP／'+a.gold+'銀）'+(reason?' · '+reason:'');b.disabled=!!reason;b.onclick=()=>{if(relationshipAction(g,h,key))draw();};box.append(b);}}draw();}
       function openHeroRoster(viewKey, query='', page=0) {
@@ -4084,12 +4172,23 @@ function settleGovernance(g){settleCityBase(g);}
       }
       // v10.4.2: recruitment and individual grievance rules.
       function talentTier(h){const n=Math.max(...['cmd','war','int','pol','cha'].map(k=>Number(h[k])||0));return n>=95?'傳奇':n>=85?'一流':n>=70?'良才':'草莽';}
-      function recruitFactors(g,h){const tier=talentTier(h),a=Number(g.hero.ambition)||50,b=Number(h.ambition)||50,affinity=Math.round(15-Math.abs(a-b)*0.3),resistance=({'草莽':5,'良才':10,'一流':20,'傳奇':25})[tier],bond=Number(h.bond??50),virtue=Number(g.hero.cha)||0,intellect=Number(g.hero.int)||0;return {tier,affinity,resistance,chance:Math.max(5,Math.min(95,Math.round(20+bond*.3+virtue*.3+intellect*.2+affinity-resistance)))};}
-      function chooseTalent(g,pool){const last=Number.isSafeInteger(g.lastTalentClue)?g.lastTalentClue:governanceTurn(g);if(g.lastTalentClue===undefined)g.lastTalentClue=last;const good=pool.filter(h=>talentTier(h)!=='草莽');const candidates=governanceTurn(g)-last>=3&&good.length?good:pool;const h=candidates[Math.floor(Math.random()*candidates.length)];if(talentTier(h)!=='草莽')g.lastTalentClue=governanceTurn(g);return h;}
+      // Directed, provisional historical relationship rules; year is an approximate activation gate.
+      const HIST_RECRUIT_RELATIONS=[['劉備','關羽',184,30],['劉備','張飛',184,30],['關羽','劉備',184,30],['張飛','劉備',184,30],['曹操','曹仁',184,25],['曹操','夏侯惇',184,20],['曹操','孔融',196,-25],['劉備','簡雍',184,15],['孫策','周瑜',190,20],['周瑜','孫策',190,20],['諸葛亮','諸葛瑾',184,25],['諸葛瑾','諸葛亮',184,25],['關羽','張飛',184,30],['張飛','關羽',184,30],['夏侯惇','夏侯淵',184,25],['夏侯淵','夏侯惇',184,25]];
+      function dynamicRelationKey(a,b){return JSON.stringify([a,b]);}
+      function changeDynamicRelation(g,a,b,delta){if(!a||!b||a===b)return;const k=dynamicRelationKey(a,b),r=g.dynamicRelations??={};r[k]=Math.max(-30,Math.min(30,(r[k]||0)+delta));}
+      function historicalPair(g,a,b){return HIST_RECRUIT_RELATIONS.filter(r=>r[0]===a&&r[1]===b&&g.year>=r[2]).reduce((v,r)=>v+r[3],0)+(g.dynamicRelations?.[dynamicRelationKey(a,b)]||0);}
+      function alliedRecruitRelation(g,h){const allies=[...(g.roster||[]),...(g.companions||[])];return Math.max(-15,Math.min(15,allies.reduce((v,a)=>v+Math.round(historicalPair(g,a.name,h.name)/2),0)));}
+      function historicalRecruitRelation(g,h){return historicalPair(g,g.hero.name,h.name)+alliedRecruitRelation(g,h);}
+      function talentRoleEligible(g,h){return !(['D','E'].includes(g.role.id)&&['華佗','張仲景','董奉'].includes(h.name));}
+      function recruitFactors(g,h){const tier=talentTier(h),a=Number(g.hero.ambition)||50,b=Number(h.ambition)||50,affinity=Math.round(15-Math.abs(a-b)*0.3),resistance=({'草莽':5,'良才':10,'一流':20,'傳奇':25})[tier],bond=Math.max(0,Math.min(100,Number(h.bond??50))),virtue=effectiveHeroStat(g,'cha'),intellect=effectiveHeroStat(g,'int');const relation=historicalRecruitRelation(g,h);const base=20+bond*(0.65+resistance/100)+virtue*.15+intellect*.1+affinity-resistance;return {tier,affinity,resistance,relation,chance:Math.max(0,Math.min(100,Math.round(base+relation)))};}
+      const TALENT_WEIGHTS={A:[60,30,9.5,.5],B:[70,24,5.8,.2],C:[80,17,2.9,.1],D:[75,21,3.9,.1],E:[85,13,1.95,.05]};
+      const TALENT_TIERS=['草莽','良才','一流','傳奇'];
+      function chooseTalent(g,pool){if(!pool.length)return null;const now=governanceTurn(g);const last=Number.isSafeInteger(g.lastTalentClue)?g.lastTalentClue:now;if(g.lastTalentClue===undefined)g.lastTalentClue=last;const buckets=TALENT_TIERS.map(t=>pool.filter(h=>talentTier(h)===t));let index=-1;if(now-last>=3&&buckets[1].length)index=1;else{let roll=Math.random()*100;const weights=TALENT_WEIGHTS[g.role.id]||TALENT_WEIGHTS.C;for(let i=0;i<4;i++){roll-=weights[i];if(roll<0){index=i;break;}}}if(index<0||!buckets[index].length)return null;const candidates=buckets[index];const h=candidates[Math.floor(Math.random()*candidates.length)];if(index>0)g.lastTalentClue=now;return h;}
       function individualGrievance(g,h,shortage){if(h.name==='張飛'&&shortage)return {extra:10,reason:'軍糧短缺'};if(h.name==='關羽'&&(g.morale??100)<40)return {extra:15,reason:'軍心低落'};return {extra:0,reason:''};}
       let pendingRecruit = null;
-      function openRecruitDecision(h) {
-        const factors=recruitFactors(game,h); const ticket = { h, state: game }; pendingRecruit = ticket;
+      function openRecruitDecision(h,retry=false) {
+        syncDiscovery(game);if(!game.discoveredHeroes.includes(heroKey(h)))game.discoveredHeroes.push(heroKey(h));
+        const known=pendingTalentList(game).find(x=>x.id===heroKey(h));if(known)h={...h,bond:known.bond};const factors=recruitFactors(game,h); const ticket = { h, state: game }; pendingRecruit = ticket;
         function finish(accept) {
           if (pendingRecruit !== ticket) return;
           pendingRecruit = null;
@@ -4099,16 +4198,17 @@ function settleGovernance(g){settleCityBase(g);}
           const success=accept&&eligible&&Math.random()*100<factors.chance;
           if (success) {
             (game.role.id==='C'?(game.companions??=[]):game.roster).push({id:h.id,heroId:h.heroId,name:h.name,courtesy:h.courtesy,origin:h.origin,war:h.war,int:h.int,cmd:h.cmd,pol:h.pol,cha:h.cha,ambition:h.ambition,bond:72,loyalty:72,grievance:0});
-            game.repute += 22;
+            game.repute += 22; if(game.role.id!=='C'){const geo=personGeoView(game).engine.snapshot();game.personGeo={last:governanceTurn(game),people:geo};} game.pendingTalents=(game.pendingTalents||[]).filter(x=>x.id!==heroKey(h));
           }
+          if(!success&&eligible)rememberTalent(game,h);
           const message = success ? `${h.name}${game.role.id==='C'?'成為同行同伴':'加入行伍名冊'}。` : accept ? (eligible?`${h.name}婉拒邀請（成功率 ${factors.chance}%）。`:'人才已不符合招募條件。') : `暫不招募${h.name}。`;
           game.logs.unshift(message); renderGame(); showResult('尋訪結果', '尋訪結束',message,[]);
         }
         ticket.cancel=()=>finish(false);
         openHeroCard(h,ticket.cancel);
         const body=document.getElementById('info-modal-body');
-        const note=document.createElement('p'); note.textContent='尋訪已消耗1 AP與180銀錢；拒絕不退還，確認招募不再扣費。'; body.append(note);
-        const detail=document.createElement('p');detail.textContent=`人才：${factors.tier}｜相性修正 ${factors.affinity}｜抗性 ${factors.resistance}｜登庸成功率 ${factors.chance}%`;body.append(detail);
+        const note=document.createElement('p'); note.textContent=retry?'再次登庸已消耗1 AP；確認不再扣費。':'尋訪已消耗1 AP與180銀錢；拒絕不退還，確認招募不再扣費。'; body.append(note);
+        const detail=document.createElement('p');detail.textContent=`人才：${factors.tier}｜相性修正 ${factors.affinity}｜抗性 ${factors.resistance}｜歷史關係 ${factors.relation}｜登庸成功率 ${factors.chance}%`;body.append(detail);
         const yes=document.createElement('button');yes.id='recruit-confirm';yes.className='btn-primary-ink w-full py-2';yes.textContent=game.role.id==='C'?'邀請同行':'確認招募';yes.onclick=()=>finish(true);body.append(yes);
         body.querySelector('#hero-back').textContent='暫不招募';
       }
@@ -4128,12 +4228,12 @@ function settleGovernance(g){settleCityBase(g);}
       function marketDeal(id,side){if(storyBusy()||!game||independentBattle(game)||game.role.id!=='D'||pendingRecruit||game.mutinyPending||!Object.hasOwn(MARKET_GOODS,id)||!['buy','sell'].includes(side))return false;const q=marketQuote(game.cities[game.currentCityId],id),cargo=game.tradeCargo||{};if(!q||!validCargo(cargo)||game.ap<1)return false;const n=cargo[id]||0,delta=side==='buy'?1:-1,price=side==='buy'?-q.buy:q.sell;if(n+delta<0||Object.values(cargo).reduce((a,b)=>a+b,0)+delta>100||game.gold+price<0||game.gold+price>Number.MAX_SAFE_INTEGER-1000000)return false;game.tradeCargo={...cargo,[id]:n+delta};game.gold+=price;game.ap--;game.logs.unshift('商業交易：'+MARKET_GOODS[id].name+' '+(side==='buy'?'買入':'賣出')+'1，銀錢 '+price+'，AP -1');renderGame();return true;}
       function openLocalMarket(){openInfo('地方市場（試行）',body=>{const city=game.cities[game.currentCityId];body.innerHTML='<p>每筆交易1單位、1 AP；貨物上限100。商品糧不等於軍糧。價格為試行設定。</p><p>銀錢 '+game.gold+'｜AP '+game.ap+'</p>';for(const [id,g] of Object.entries(MARKET_GOODS)){const q=marketQuote(city,id),row=document.createElement('div');row.className='border-b p-2';row.textContent=g.name+'｜持有 '+(game.tradeCargo?.[id]||0)+(q?'｜買 '+q.buy+'／賣 '+q.sell:'｜物產待核對，暫停交易');for(const side of ['buy','sell']){const b=document.createElement('button');b.type='button';b.id='market-'+side+'-'+id;b.className='btn-secondary-ink p-2';b.textContent=side==='buy'?'買入':'賣出';b.disabled=!q||game.role.id!=='D'||game.ap<1||pendingRecruit||game.mutinyPending||(side==='buy'?(game.gold<q.buy||Object.values(game.tradeCargo||{}).reduce((a,b)=>a+b,0)>=100):!(game.tradeCargo?.[id]>0));b.onclick=()=>{marketDeal(id,side);openLocalMarket();};row.append(b);}body.append(row);}});}
       function validBanditBase(g){const b=g.banditBase;return b===undefined||b===null||g.role.id==='E'&&b&&Object.hasOwn(g.cities,b.cityId)&&Number.isInteger(b.defense)&&b.defense>=0&&b.defense<=100&&(b.lastRaid===null||Number.isSafeInteger(b.lastRaid)&&b.lastRaid>=0&&b.lastRaid<=governanceTurn(g));}
-      function settleBanditRaid(g){const b=g.banditBase;if(g.role.id!=='E'||!b||careerTier(g).tier<4||g.currentCityId!==b.cityId||g.troops<1)return false;const t=governanceTurn(g),c=g.cities[b.cityId];if(!c||c.owner==='PLAYER'||c.garrison<100||b.lastRaid!==null&&t-b.lastRaid<9)return false;const n=Math.min(300,c.garrison),food=Math.min(g.food,Math.ceil(g.troops/10)*2);const r=BattleCore.resolve({troops:g.troops,command:g.hero.cmd,martial:g.hero.war,morale:g.morale??100,type:'infantry',food},{troops:n,command:60,martial:60,morale:80,type:'infantry',food:Math.ceil(n/10)*2},'mountain',[1,2].map(()=>1+Math.floor(Math.random()*100)));if(!r)return false;b.lastRaid=t;g.troops=r.attacker.troops;g.food-=food-r.attacker.food;g.morale=r.attacker.morale;c.garrison-=n-r.defender.troops;if(r.outcome!=='attacker')b.defense=Math.max(0,b.defense-10);g.logs.unshift('【官軍進剿】寨眾剩餘 '+g.troops+'，寨防 '+b.defense);return true;}
+      function settleBanditRaid(g){const b=g.banditBase;if(g.role.id!=='E'||!b||careerTier(g).tier<4||g.currentCityId!==b.cityId||g.troops<1)return false;const t=governanceTurn(g),c=g.cities[b.cityId];if(!c||c.owner==='PLAYER'||c.garrison<100||b.lastRaid!==null&&t-b.lastRaid<9)return false;const n=Math.min(300,c.garrison),food=Math.min(g.food,Math.ceil(g.troops/10)*2);const r=BattleCore.resolve({troops:g.troops,command:effectiveHeroStat(g,'cmd'),martial:effectiveHeroStat(g,'war'),morale:g.morale??100,type:'infantry',food},{troops:n,command:60,martial:60,morale:80,type:'infantry',food:Math.ceil(n/10)*2},'mountain',[1,2].map(()=>1+Math.floor(Math.random()*100)));if(!r)return false;b.lastRaid=t;g.troops=r.attacker.troops;g.food-=food-r.attacker.food;g.morale=r.attacker.morale;c.garrison-=n-r.defender.troops;if(r.outcome!=='attacker')b.defense=Math.max(0,b.defense-10);g.logs.unshift('【官軍進剿】寨眾剩餘 '+g.troops+'，寨防 '+b.defense);return true;}
       function validTradeGuards(g){return g.tradeGuards===undefined||Number.isInteger(g.tradeGuards)&&g.tradeGuards>=0&&g.tradeGuards<=100;}
       function validCaravan(g){const c=g.caravan;if(c===undefined||c===null)return true;return typeof c==='object'&&Array.isArray(c.path)&&c.path.length>=2&&c.path.length<=30&&new Set(c.path).size===c.path.length&&c.path.every((id,i)=>Object.hasOwn(g.cities,id)&&(!i||g.cities[c.path[i-1]].neighbors.includes(id)))&&(c.last===undefined||(Number.isSafeInteger(c.last)&&c.last>=0&&c.last<=governanceTurn(g)))&&Number.isInteger(c.step)&&c.step>=0&&c.step<c.path.length-1&&validCargo(c.cargo)&&Object.values(c.cargo).reduce((a,b)=>a+b,0)>0&&Object.values(c.cargo).reduce((a,b)=>a+b,0)<=100&&Object.keys(c.cargo).every(id=>marketQuote(g.cities[c.path.at(-1)],id));}
       function dispatchCaravan(dest){if(storyBusy()||!game||independentBattle(game)||game.role.id!=='D'||game.caravan||pendingRecruit||game.mutinyPending||game.ap<1)return false;const path=cityRoute(game.cities,game.currentCityId,dest,game.roadBlocks||[]),cargo={...game.tradeCargo};if(!path||path.length<2||!validCargo(cargo))return false;const c={path,step:0,cargo};if(!validCaravan({...game,caravan:c}))return false;game.caravan=c;game.tradeCargo={};game.ap--;game.logs.unshift('商隊出發：'+game.cities[dest].name);renderGame();return true;}
       function settleCaravan(g){if(!g.caravan||!validCaravan(g))return;const c=g.caravan;const t=governanceTurn(g);if(c.last===t)return;c.last=t;if(!roadOpen(g,c.path[c.step],c.path[c.step+1]))return;const next=g.cities[c.path[c.step+1]];if(g.role.id==='D'&&next.security<60){const n=g.tradeGuards||0;let win=false;if(n>0){const r=BattleCore.resolve({troops:n,command:50,martial:50,morale:80,type:'infantry',food:Math.ceil(n/10)*2},{troops:30,command:45,martial:45,morale:70,type:'infantry',food:6},'plain',[1,2].map(()=>1+Math.floor(Math.random()*100)));g.tradeGuards=r.attacker.troops;win=r.outcome==='attacker'&&r.attacker.troops>0;}if(!win){for(const id of Object.keys(c.cargo))c.cargo[id]=Math.floor(c.cargo[id]*0.8);g.logs.unshift('商隊遇襲：貨物損失，剩餘鏢師 '+(g.tradeGuards||0));if(!Object.values(c.cargo).some(n=>n>0)){g.caravan=null;return;}}else g.logs.unshift('商隊護衛擊退匪眾，剩餘鏢師 '+g.tradeGuards);}if(c.step+1<c.path.length-1){c.step++;return;}const dest=g.cities[c.path.at(-1)],revenue=Object.entries(c.cargo).reduce((a,[id,n])=>a+marketQuote(dest,id).sell*n,0);if(g.gold+revenue>Number.MAX_SAFE_INTEGER-1000000)return;g.gold+=revenue;g.caravan=null;g.logs.unshift('商隊抵達'+dest.name+'，販售收入 '+revenue+'（非淨利）');}
-      function openCaravan(){openInfo('商隊運輸（試行）',body=>{const c=game.caravan;const status=document.createElement('p');status.textContent=c?(roadOpen(game,c.path[c.step],c.path[c.step+1])?'運輸中：':'道路封鎖，暫停：')+game.cities[c.path[c.step]].name+' → '+game.cities[c.path.at(-1)].name+'，剩餘 '+(c.path.length-1-c.step)+'旬':'派遣全部持有商品，抵達自動販售；收入不等於淨利。';body.append(status);const guards=document.createElement('p');guards.textContent='鏢師：'+(game.tradeGuards||0)+' / 100；低治安道路可能遇襲。';body.append(guards);if(c)return;const select=document.createElement('select');select.id='caravan-dest';for(const city of Object.values(game.cities)){if(city.id===game.currentCityId||!marketQuote(city,'salt')||!cityRoute(game.cities,game.currentCityId,city.id,game.roadBlocks||[]))continue;const o=document.createElement('option');o.value=city.id;o.textContent=city.name;select.append(o);}body.append(select);const b=document.createElement('button');b.id='caravan-send';b.className='btn-secondary-ink p-2';b.textContent='派遣商隊（1 AP）';b.disabled=game.role.id!=='D'||game.ap<1||!Object.values(game.tradeCargo||{}).some(n=>n>0)||!select.value;b.onclick=()=>{dispatchCaravan(select.value);openCaravan();};body.append(b);});}
+      function openCaravan(chosen){openInfo('商隊運輸（試行）',body=>{const c=game.caravan;const status=document.createElement('p');status.textContent=c?(roadOpen(game,c.path[c.step],c.path[c.step+1])?'運輸中：':'道路封鎖，暫停：')+game.cities[c.path[c.step]].name+' → '+game.cities[c.path.at(-1)].name+'，剩餘 '+(c.path.length-1-c.step)+'旬':'派遣全部持有商品，抵達自動販售；收入不等於淨利。';body.append(status);const guards=document.createElement('p');guards.textContent='鏢師：'+(game.tradeGuards||0)+' / 100；低治安道路可能遇襲。';body.append(guards);if(c)return;const select=document.createElement('select');select.id='caravan-dest';for(const city of Object.values(game.cities)){if(city.id===game.currentCityId||!marketQuote(city,'salt')||!cityRoute(game.cities,game.currentCityId,city.id,game.roadBlocks||[]))continue;const o=document.createElement('option');o.value=city.id;o.textContent=city.name;select.append(o);}if(typeof chosen==='string'&&Array.from(select.options).some(o=>o.value===chosen))select.value=chosen;body.append(select);const b=document.createElement('button');b.id='caravan-send';b.className='btn-secondary-ink p-2';b.textContent='派遣商隊（1 AP）';b.disabled=game.role.id!=='D'||game.ap<1||!Object.values(game.tradeCargo||{}).some(n=>n>0)||!select.value;b.onclick=()=>{dispatchCaravan(select.value);openCaravan();};body.append(b);});}
 // NPC trial ledger: independent abstract supply and trade units.
       function validNpcEconomy(g){const n=g.npcEconomy;if(n===undefined)return true;if(!n||!Number.isSafeInteger(n.last)||n.last<0||n.last>governanceTurn(g)||!n.cities||typeof n.cities!=='object'||Array.isArray(n.cities))return false;return Object.keys(n.cities).length<=30&&Object.entries(n.cities).every(([id,c])=>Object.hasOwn(g.cities,id)&&c&&['supply','goods','fund','shortage'].every(k=>Number.isSafeInteger(c[k])&&c[k]>=0&&c[k]<=1000000));}
       function factionPair(a,b){return JSON.stringify([a,b].sort());}
@@ -4215,91 +4315,61 @@ function openCampaigns(){openInfo('天下戰役',body=>{aftercarePanel(body);cap
       function settleNpcEconomy(g){if(!validNpcEconomy(g))return;const t=governanceTurn(g);if(g.npcEconomy?.last>=t)return;const n=g.npcEconomy||{last:0,cities:{}};n.last=t;const cities=Object.values(g.cities).filter(c=>c.owner!=='PLAYER'&&c.owner!=='無主');for(const c of cities){const need=Math.ceil(Math.max(0,c.garrison)/100);const a=n.cities[c.id]||{supply:need*2,goods:10,fund:100,shortage:0};n.cities[c.id]=a;const base=syncCityBase(c);const output=Math.floor(base.agriculture/2*settlementScale(c).rate)+Math.ceil(npcCapacity(c)/100);a.supply=Math.min(1000000,a.supply+Math.floor(output*cityRecoveryRate(g,c)));a.shortage=a.supply<need?Math.min(1000000,a.shortage+1):0;a.supply=Math.max(0,a.supply-need);a.goods=Math.min(1000000,a.goods+Math.floor((1+base.commerce/40)*cityRecoveryRate(g,c)));a.fund=Math.min(1000000,a.fund+Math.floor(base.commerce/10*cityRecoveryRate(g,c)*settlementScale(c).rate));settleNpcDevelopment(g,c,a,t);}
       if(t%3===0)for(const c of cities){const a=n.cities[c.id];const dest=c.neighbors.find(id=>roadOpen(g,c.id,id)&&cities.some(x=>x.id===id)&&n.cities[id].goods<a.goods-2&&n.cities[id].fund>=5);if(dest&&a.goods>=1&&a.fund<=999995){const b=n.cities[dest];a.goods--;b.goods++;a.fund+=5;b.fund-=5;}}g.npcEconomy=n;}
       function openNpcEconomy(){openInfo('地方經濟與補給（試行）',body=>{const n=game.npcEconomy;body.textContent='獨立抽象點數，不等於玩家銀錢或軍糧。每旬維持守軍，每三旬評估鄰城交易。';if(!n){body.append(document.createTextNode(' 尚未結算。'));return;}for(const [id,a] of Object.entries(n.cities)){const el=document.createElement('p');el.textContent=game.cities[id].name+'｜補給 '+a.supply+'｜貨物 '+a.goods+'｜資金 '+a.fund+'｜缺糧旬 '+a.shortage;body.append(el);}});}
-      function openTradeRoute() {
+      function openTradeRoute(chosen) {
         const origin=game.currentCityId;
         openInfo('商路規劃',body=>{
           const cities=Object.values(game.cities);
           body.innerHTML='<p class="text-xs">依現有道路規劃；不代表通商許可、價格或補給安全。</p><label for="trade-dest">目的城池</label><select id="trade-dest" class="w-full border p-2">'+cities.filter(c=>c.id!==origin).map(c=>`<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('')+'</select><div id="trade-plan" class="text-sm p-2"></div>';
           const select=body.querySelector('#trade-dest'),out=body.querySelector('#trade-plan');const market=document.createElement('button');market.id='local-market-btn';market.type='button';market.className='btn-secondary-ink p-2';market.textContent='地方市場';market.onclick=openLocalMarket;body.prepend(market);const caravan=document.createElement('button');caravan.id='caravan-btn';caravan.className='btn-secondary-ink p-2';caravan.textContent='商隊運輸';caravan.onclick=openCaravan;body.prepend(caravan);
           function update(){const path=cityRoute(game.cities,origin,select.value,game.roadBlocks||[]);if(!path){out.textContent='無可達道路';return;}out.innerHTML=`<strong>${path.length-1} 段道路</strong>`+path.map(id=>{const c=game.cities[id],d=SOURCE_CITY_BUSINESS[c.province+'·'+c.name];return `<div class="border-b p-2">${escapeHtml(c.name)}｜${d?escapeHtml(d.biz)+' · '+escapeHtml(d.terrain):'物產待核對'}</div>`;}).join('');}
-          select.addEventListener('change',update);update();
+          if(typeof chosen==='string')select.value=chosen;select.addEventListener('change',update);update();
         });
       }
+function localSites(c){return [['大鎮',3,180,120],['小鎮',3,100,80],['鄉里',4,55,50],['村落',4,25,30]].map(([name,level,gold,food],i)=>({id:c.id+'-local-'+i,name:c.name+'近郊'+name,level,gold,food,kind:name,cityId:c.id}));}
+function siteStock(g,site){const x=g.localStocks?.[site.id],t=governanceTurn(g);const elapsed=Math.max(0,t-(x?.turn??t));return {gold:Math.min(site.gold,Math.max(0,x?.gold??site.gold)+elapsed*Math.ceil(site.gold/5)),food:Math.min(site.food,Math.max(0,x?.food??site.food)+elapsed*Math.ceil(site.food/5)),turn:t};}
+function writeSiteStock(g,site,x){g.localStocks={...(g.localStocks||{}),[site.id]:x};}
+function siteActionReason(g,c,site){if(g.ap<1)return 'AP不足';if(c.id!==g.currentCityId)return '須先抵達所屬城池';if(independentBattle(g)||pendingRecruit||g.mutinyPending||storyBusy())return '目前不可行動';if(['A','B'].includes(g.role.id)&&c.owner!==(g.role.id==='A'?'PLAYER':g.liegeFaction))return '非所屬勢力';if(g.role.id==='B'&&careerTier(g).tier<2)return '官階不足';if(g.role.id==='D'&&g.gold<10)return '銀錢不足';return '';}
+function interactSite(g,c,site){if(siteActionReason(g,c,site)||!['A','B','C','D'].includes(g.role.id))return false;const x=siteStock(g,site);let msg='';if(g.role.id==='D'){if(x.food<10)return false;g.gold-=10;g.food+=10;x.food-=10;msg='購入軍糧10';}else if(g.role.id==='C'){if(x.gold<5)return false;x.gold-=5;g.gold+=5;msg='受僱獲銀錢5';}else{c.security=Math.min(100,c.security+1);msg='巡查治安+1';}g.ap--;writeSiteStock(g,site,x);g.logs.unshift('【地方】'+site.name+'：'+msg);return true;}
+function localRaidReason(g,c,site){if(g.role.id!=='E'||careerTier(g).tier<3)return '須達小頭目';if(g.ap<1||g.troops<1||g.food<Math.ceil(g.troops/10))return 'AP、部眾或軍糧不足';if(c.owner==='PLAYER'||(c.id!==g.currentCityId&&!roadOpen(g,g.currentCityId,c.id)))return '目標不可達';if(independentBattle(g)||pendingRecruit||g.mutinyPending||storyBusy())return '目前不可行動';const stock=siteStock(g,site);if(stock.gold+stock.food===0)return '據點物資耗盡，待恢復';return '';}
+function raidLocalSite(g,c,site){if(localRaidReason(g,c,site))return false;const n=Math.max(1,Math.min(c.garrison,Math.ceil(site.gold/3)));const food=Math.ceil(g.troops/10);const r=BattleCore.resolve({troops:g.troops,command:effectiveHeroStat(g,'cmd'),martial:effectiveHeroStat(g,'war'),morale:g.morale??100,type:'infantry',food},{troops:n,command:45,martial:45,morale:75,type:'infantry',food:Math.ceil(n/10)*2},'plain',[1,2].map(()=>1+Math.floor(Math.random()*100)));if(!r)return false;g.ap--;g.food-=food;g.troops=r.attacker.troops;g.morale=r.attacker.morale;g.localRaidHistory={...(g.localRaidHistory||{}),[site.id]:governanceTurn(g)};const win=r.outcome==='attacker'&&g.troops>0;const stock=siteStock(g,site);if(win){g.gold+=stock.gold;g.food+=stock.food;writeSiteStock(g,site,{gold:0,food:0,turn:stock.turn});c.security=Math.max(0,c.security-3);}g.logs.unshift('【劫掠】'+site.name+'：'+(win?'取得銀錢 '+stock.gold+'、軍糧 '+stock.food:'失敗')+'，剩餘部眾 '+g.troops);return true;}
+function openWorldMap(mode='browse'){
+ if(!game||storyBusy())return;const g=game,role=g.role.id,labels={A:'出征',B:'奉命出征',C:'遊歷',D:'行商',E:'劫掠'},cities=Object.values(g.cities),origin=g.currentCityId;
+ openInfo('天下輿圖 · '+(mode==='browse'?'閱覽':mode==='expedition'?labels[role]:mode==='trade'?'行商':labels[role]),body=>{
+ const modal=document.getElementById('info-modal');modal.classList.add('world-map-full');
+ const toolbar=document.createElement('div');toolbar.className='flex flex-wrap gap-2';body.append(toolbar);
+ const button=(parent,label,fn)=>{const b=document.createElement('button');b.type='button';b.className='btn-secondary-ink p-2';b.textContent=label;b.onclick=fn;parent.append(b);return b;};
+ button(toolbar,'閱覽',()=>openWorldMap());if(['A','B'].includes(role))button(toolbar,labels[role],()=>openWorldMap('expedition'));if(role==='C')button(toolbar,'遊歷',()=>openWorldMap('travel'));if(role==='D')button(toolbar,'行商',()=>openWorldMap('trade'));if(role==='E')button(toolbar,'劫掠／探查',()=>openWorldMap('scout'));
+ button(toolbar,'天下戰役',openCampaigns);button(toolbar,'勢力關係',openDiplomacy);button(toolbar,'地方經濟',openNpcEconomy);
+ const wrap=document.createElement('div');wrap.style.cssText='overflow:auto;height:55vh;background:#e7dec3;border:1px solid #a99b7e;border-radius:8px;touch-action:pan-x pan-y';body.append(wrap);
+ const ns='http://www.w3.org/2000/svg',svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 1000 800');svg.style.cssText='display:block;width:100%;min-width:520px;height:auto';wrap.append(svg);
+ const el=(tag,attrs,text)=>{const e=document.createElementNS(ns,tag);for(const [k,v] of Object.entries(attrs))e.setAttribute(k,v);if(text)e.textContent=text;svg.append(e);return e;};
+ const xy=c=>[40+Number(c.x??TKGeoEngine.getCity(c.id).x)*9.2,40+Number(c.y??TKGeoEngine.getCity(c.id).y)*7.2];const owners=[...new Set(cities.map(c=>c.owner))].sort();const color=o=>o==='PLAYER'?'#a33232':o==='無主'?'#777':`hsl(${owners.indexOf(o)*137.508%360} 48% 40%)`;
+ const details=document.createElement('div');details.className='p-3 border rounded-xl';body.append(details);details.textContent='點擊地圖據點查看資料。閱覽不扣AP。';
+ let zoom=1;const redraw=()=>{svg.style.width=(zoom*100)+'%';svg.style.minWidth=(520*zoom)+'px';for(const e of svg.querySelectorAll('[data-map-level]'))e.style.display=zoom>=Number(e.dataset.mapLevel)?'':'none';};
+ let pinch=null;wrap.addEventListener('touchstart',e=>{if(e.touches.length===2)pinch={distance:Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY),zoom};},{passive:true});wrap.addEventListener('touchmove',e=>{if(pinch&&e.touches.length===2&&pinch.distance>0){e.preventDefault();zoom=Math.max(1,Math.min(4,pinch.zoom*Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)/pinch.distance));redraw();}},{passive:false});wrap.addEventListener('touchend',()=>{pinch=null;});wrap.addEventListener('touchcancel',()=>{pinch=null;});button(toolbar,'＋',()=>{zoom=Math.min(4,zoom+.5);redraw()});button(toolbar,'－',()=>{zoom=Math.max(1,zoom-.5);redraw()});
+ for(const c of cities)for(const id of c.neighbors||[]){const d=g.cities[id];if(!d||c.id>=id)continue;const [x,y]=xy(c),[x2,y2]=xy(d);el('line',{x1:x,y1:y,x2,y2,stroke:roadOpen(g,c.id,id)?'#98896b':'#b33','stroke-width':2,'stroke-dasharray':roadOpen(g,c.id,id)?'':'6 4'});}
+ function select(c){details.replaceChildren();const h=document.createElement('strong');h.textContent=c.name+' · '+c.owner;details.append(h);const p=document.createElement('p');p.textContent=`${c.province}｜守將 ${c.defender}｜守軍 ${c.garrison}｜繁榮 ${c.prosperity}｜治安 ${c.security}`;details.append(p);if(c.id===origin)return;
+ if(mode==='expedition'){if(militaryPermission(g,c.id,'field')&&roadOpen(g,origin,c.id))button(details,'選定出征目標',()=>openExpedition(c.id));else details.append('目前無出征權限或道路不通。');}
+ if(mode==='trade'&&role==='D'){button(details,'規劃商路',()=>openTradeRoute(c.id));if(cityRoute(g.cities,origin,c.id,g.roadBlocks||[]))button(details,'配置商隊',()=>openCaravan(c.id));}
+ if(mode==='scout'&&role==='E'){const p=document.createElement('p');p.textContent='探查：守軍 '+c.garrison+'，道路 '+(roadOpen(g,origin,c.id)?'暢通':'非接壤或封鎖')+'。放大至三級可選擇近郊據點。';details.append(p);}
+ if(mode==='travel'&&role==='C'&&roadOpen(g,origin,c.id))button(details,'確認遊歷（1 AP）',()=>{if(game!==g||g.currentCityId!==origin||g.ap<1||independentBattle(g)||pendingRecruit||g.mutinyPending||storyBusy()||!roadOpen(g,origin,c.id))return;g.ap--;g.currentCityId=c.id;g.logs.unshift('【遊歷】抵達'+c.name);renderGame();openWorldMap();});
+ }
+ for(const c of cities){const [x,y]=xy(c),r=c.id===origin?15:11;const dot=el('circle',{cx:x,cy:y,r,fill:color(c.owner),stroke:c.id===origin?'#f5d34e':'#fff','stroke-width':3,tabindex:0,role:'button','aria-label':c.name});const label=el('text',{x,y:y+26,'text-anchor':'middle','font-size':17,fill:'#382e21','font-weight':'bold'},c.name);for(const e of [dot,label]){e.style.cursor='pointer';e.onclick=()=>select(c);e.onkeydown=ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();select(c);}}}}
+ for(const c of cities){const [x,y]=xy(c);const scale=settlementScale(c).name;const level=scale==='小型城池'&&c.id!==origin?2:1;for(const e of svg.querySelectorAll('[aria-label]'))if(e.getAttribute('aria-label')===c.name)e.dataset.mapLevel=level;for(const e of svg.querySelectorAll('text'))if(e.textContent===c.name)e.dataset.mapLevel=level;}
+ for(const c of cities){const [x,y]=xy(c);for(const [i,site] of localSites(c).entries()){const angle=(i*90+45)*Math.PI/180;const sx=x+Math.cos(angle)*35,sy=y+Math.sin(angle)*35;const dot=el('circle',{cx:sx,cy:sy,r:5,fill:color(c.owner),stroke:'#fff','stroke-width':1,tabindex:0,role:'button','aria-label':site.name});const label=el('text',{x:sx,y:sy+12,'font-size':8,'text-anchor':'middle',fill:'#382e21'},site.kind);for(const e of [dot,label]){e.dataset.mapLevel=site.level;e.style.cursor='pointer';e.onclick=()=>{details.replaceChildren();const p=document.createElement('p');const stock=siteStock(g,site);p.textContent=site.name+'｜'+c.owner+'｜模擬據點（非史實地名）｜庫存 '+stock.gold+'/'+site.gold+' 銀錢／'+stock.food+'/'+site.food+' 軍糧';details.append(p);if(['A','B','C','D'].includes(role)){const reason=siteActionReason(g,c,site);if(reason)details.append(reason);else if(role==='D'&&stock.food<10||role==='C'&&stock.gold<5)details.append('庫存不足');else button(details,({A:'巡查',B:'巡查',C:'受僱',D:'購入軍糧（10銀錢）'})[role]+'（1 AP）',()=>{if(game!==g||!interactSite(g,c,site))return;renderGame();openWorldMap(mode);});}if(mode==='scout'&&role==='E'){const reason=localRaidReason(g,c,site);if(reason)details.append(reason);else button(details,'確認劫掠（1 AP）',()=>{if(game!==g||!raidLocalSite(g,c,site))return;renderGame();openWorldMap('scout');});}};e.onkeydown=ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();e.onclick();}};}}}
+ for(const c of cities){const [x,y]=xy(c);const war=(g.campaigns?.active||[]).some(a=>a.to===c.id||a.from===c.id);if(war)el('text',{x:x+17,y:y-13,'font-size':17,fill:'#a33232','pointer-events':'none'},'⚔');if(g.caravan?.path?.[g.caravan.step]===c.id)el('text',{x:x-23,y:y-13,'font-size':15,fill:'#73541d','pointer-events':'none'},'商');}redraw();
+ const legend=document.createElement('div');legend.style.cssText='display:flex;flex-wrap:wrap;gap:8px';for(const o of owners){const span=document.createElement('span');span.style.color=color(o);span.textContent='● '+o;legend.append(span);}body.append(legend);
+ });
+}
       function openQuickViewModal(viewKey) {
         if (!game) return;
-        if (viewKey === 'personnel' || viewKey === 'roster') {
+        if(viewKey==='roster'){openCollection();return;}
+        if (viewKey === 'personnel') {
           openHeroRoster(viewKey);
           return;
         }
-        if (viewKey === 'treasury') {
-          openInfo('行伍寶庫與神兵', function (body) {
-            body.innerHTML = `
-              <div class="text-xs font-bold text-stone-700 mb-1">已擁有寶物（${game.treasures.length} 件）</div>
-              <div class="flex flex-wrap gap-1.5 mb-3">
-                ${game.treasures.map(function (t) { return `<span class="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-950 text-xs font-bold">${escapeHtml(t)}</span>`; }).join('')}
-              </div>
-              <div class="text-xs font-bold text-stone-700 mb-1">天下珍寶圖鑑</div>
-              ${TREASURE_DB.map(function (tr) {
-                return `<div class="p-2.5 rounded-xl border border-stone-200 bg-white text-xs"><strong>${tr.name}</strong>（${tr.slot}）— ${tr.bonusText}</div>`;
-              }).join('')}
-            `;
-          });
-          return;
-        }
-        if (viewKey === 'map') {
-          openInfo('九州三十城輿圖', function (body) {
-            body.innerHTML = Object.values(game.cities).map(function (c) {
-              const here = c.id === game.currentCityId;
-              const reachable = roadOpen(game,game.currentCityId,c.id);
-              const route = cityRoute(game.cities,game.currentCityId,c.id,game.roadBlocks||[]);
-              return `
-                <div class="p-2.5 rounded-xl border ${here ? 'border-red-800 bg-amber-50' : 'border-stone-200 bg-white'} flex items-center justify-between gap-2">
-                  <div>
-                    <strong class="font-serif-title text-sm text-stone-900">${escapeHtml(c.name)}</strong>
-                    <span class="text-xs text-stone-500">（${escapeHtml(c.province)} · 守將：${escapeHtml(c.defender)}）</span>
-                    <div class="text-[11px] text-stone-600">繁榮 ${c.prosperity} · 治安 ${c.security} · 城防 ${c.defense}</div>
-                  </div>
-                  ${
-                    here
-                      ? '<span class="text-xs font-bold text-red-900 px-2 py-1">駐紮中</span>'
-                      : !reachable ? `<span class="text-xs">${route ? '需經 '+(route.length-1)+' 段道路' : '無可達道路'}</span>` : `<button type="button" data-travel-id="${escapeHtml(c.id)}" class="travel-city-btn btn-secondary-ink px-2.5 py-1 text-xs font-bold">行軍（1 AP・糧 ${marchFood(game.troops)}）</button>`
-                  }
-                </div>
-              `;
-            }).join('');
-
-            body.insertAdjacentHTML('afterbegin','<button id="trade-route-btn" class="btn-secondary-ink p-2 w-full">商路規劃</button>');
-            body.querySelector('#trade-route-btn').addEventListener('click',openTradeRoute);const npc=document.createElement('button');npc.className='btn-secondary-ink p-2 w-full';npc.textContent='地方經濟與補給';npc.onclick=openNpcEconomy;body.prepend(npc);const dip=document.createElement("button");dip.className="btn-secondary-ink p-2 w-full";dip.textContent="天下勢力關係";dip.onclick=openDiplomacy;body.prepend(dip);const war=document.createElement("button");war.className="btn-secondary-ink p-2 w-full";war.textContent="天下戰役";war.onclick=openCampaigns;body.prepend(war);
-            body.querySelectorAll('.travel-city-btn').forEach(function (btn) {
-              btn.addEventListener('click', function () {
-                const tid = btn.getAttribute('data-travel-id');
-                if (independentBattle(game)||storyBusy()||game.mutinyPending||pendingRecruit) return;
-                if (!game.cities[tid] || !roadOpen(game,game.currentCityId,tid)) return;
-                if (game.ap < 1) {
-                  document.getElementById('info-modal').classList.add('hidden');
-                  showResult('行動力不足', '本旬無法遠行', '請先進行旬末結算。', []);
-                  return;
-                }
-                if (pendingRecruit || game.mutinyPending) return;
-                const marchCost = marchFood(game.troops);
-                if (marchCost === null || !Number.isFinite(game.food) || game.food < marchCost) {
-                  document.getElementById('info-modal').classList.add('hidden');
-                  showResult('行軍補給不足','無法出發',`需要糧草 ${marchCost ?? '待核對'}，現有 ${game.food}。`,[]); return;
-                }
-                const previousFood = game.food;
-                game.ap -= 1;
-                game.food -= marchCost;
-                game.currentCityId = tid;
-                const dest = game.cities[tid];
-                game.logs.unshift(`【行軍】${game.hero.name}移駐${dest.name}（${dest.province}）。行軍糧草 ${previousFood}-${marchCost}=${game.food}。`);
-                document.getElementById('info-modal').classList.add('hidden');
-                renderGame();
-                showResult('抵達新地', `駐紮${dest.name}`, `${dest.province} · 守將：${dest.defender}`, ['行動力 -1 AP', `行軍糧草 -${marchCost}`]);
-              });
-            });
-          });
-          return;
-        }
+        if (viewKey === 'treasury') {openEquipment();return;}
+        if (viewKey === 'map') {openWorldMap();return;}
         if (viewKey === 'world') {
           openInfo('天下世態與割據', function (body) {
             body.innerHTML = `
@@ -4414,7 +4484,7 @@ function openCampaigns(){openInfo('天下戰役',body=>{aftercarePanel(body);cap
           setupCfg.year = years[Math.floor(Math.random() * years.length)];
           randomHistHero();
         });
-        document.getElementById('btn-launch-game').addEventListener('click', launchGame);
+        document.getElementById('btn-launch-game').addEventListener('click', ()=>launchGame());
 
         document.getElementById('btn-mode-hist').addEventListener('click', function () {
           setupCfg.charMode = 'historical';
@@ -4496,6 +4566,7 @@ function openCampaigns(){openInfo('天下戰役',body=>{aftercarePanel(body);cap
           document.getElementById('result-modal').classList.add('hidden');
         });
         document.getElementById('btn-info-close').addEventListener('click', function () {
+          restoreCompactPanels();
           if (pendingRecruit) { pendingRecruit.cancel(); return; }
           if(storyBusy())return;
           document.getElementById('info-modal').classList.add('hidden');
@@ -4509,7 +4580,7 @@ function openCampaigns(){openInfo('天下戰役',body=>{aftercarePanel(body);cap
         hydrateAllDatabases();
         bindAll();
         renderSetup();
-        setDiag(`群雄行伍錄 v10.5.0-beta-candidate · 已還原 ${HISTORICAL_DB.length} 位名將與 ${TKGeoEngine.getAllCities().length} 座城池`, false);
+        setDiag(`群雄行伍錄 v10.6.0-dev18 · 已還原 ${HISTORICAL_DB.length} 位名將與 ${TKGeoEngine.getAllCities().length} 座城池`, false);
       }
 
       if (document.readyState === 'loading') {
